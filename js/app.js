@@ -5,6 +5,7 @@ import { ic, esc, photo, toast, compressImage, slugify, ask } from './ui.js';
 import { NATIVE, siteBase, saveFile, initNative, tap } from './native.js';
 import { BRANDS, COLOURS, MONTHS, findBrand, findModel, splitName } from './cars-data.js';
 import { t, lang, setLang } from './i18n.js';
+import { applyTheme, toggleTheme, useSystemTheme, themeIsAuto, theme } from './theme.js';
 
 const $app = document.getElementById('app');
 const digits = (s) => String(s || '').replace(/\D/g, '');
@@ -73,6 +74,7 @@ const logoImg = (cls = 'mark') => `<img class="${cls}" src="icons/logo.svg" alt=
 const topBar = (withSearch) => `<header class="top"><div class="wrap topin">
   <a class="brandl" href="#/">${logoImg()}<div><b>${esc(CONFIG.businessName)}</b><small>${esc(CONFIG.tagline)}</small></div></a>
   ${withSearch ? `<label class="search">${ic('search')}<input id="q" type="search" placeholder="${esc(t('search'))}" value="${esc(ui.q)}" autocomplete="off" aria-label="Search cars"></label>` : '<span class="grow"></span>'}
+  <button class="topth" data-theme-btn aria-label="${t('themeAria')}">${ic('sun', 'sun')}${ic('moon', 'moon')}</button>
   <button class="topln" data-lang aria-label="${t('langAria')}">${t('langBtn')}</button>
   <a class="topsell" href="#/sell">${ic('tag', 'sm')}<span>${t('sellCar')}</span></a>
   <a class="topsv" href="#/saved" aria-label="Saved cars and test drives">${ic('heart')}<span>${t('saved')}</span><i id="favn" class="${favs().length + myDrives().length ? '' : 'hide'}">${favs().length || ''}</i></a>
@@ -869,6 +871,8 @@ async function profile() {
     <div class="fl"><button class="b pri" id="save">Save profile</button></div></form>
     <h3 class="psec">Login email</h3>
     <form id="ef" class="fl" novalidate><label for="email">Email used to log in</label><div class="two" style="grid-template-columns:1fr auto;gap:8px"><input class="fi" id="email" type="email" value="${esc(sess.email)}"><button class="b ghost" style="width:auto">Change</button></div><p class="hint" id="emsg">${LIVE ? 'We send a confirmation link to the new email before the change happens.' : ''}</p></form>
+    <h3 class="psec">Appearance</h3>
+    <div class="fl"><div class="seg" id="thm">${[['auto', 'Phone setting'], ['light', 'Navy (light)'], ['dark', 'Black + gold']].map(([k, l]) => `<button type="button" data-th="${k}" class="${(themeIsAuto() ? 'auto' : theme()) === k ? 'on' : ''}">${l}</button>`).join('')}</div></div>
     <h3 class="psec">More</h3>
     <div class="actions" style="grid-template-columns:1fr"><a class="b ghost" href="#/owner/team">${ic('users')}Team: add sales and staff</a><a class="b ghost" href="#/account">${ic('user')}My customer view</a><button class="b ghost" id="csv">${ic('download')}Download backup (Excel / CSV)</button><button class="b ghost" id="link">${ic('share')}Share showroom link</button>
     ${LIVE ? '' : `<button class="b ghost" id="reset">Reset demo data</button>`}<button class="b red" id="out">${ic('logout')}Log out</button></div>
@@ -878,6 +882,7 @@ async function profile() {
     document.querySelectorAll('[data-tdd]').forEach((b) => (b.onclick = () => { $('td_days_ahead').value = Math.min(30, Math.max(1, (num($('td_days_ahead').value) || 7) + Number(b.dataset.tdd))); }));
     const grab = () => { ['business_name', 'tagline', 'whatsapp', 'phone', 'hero_badge'].forEach((k) => { if ($(k)) v[k] = $(k).value; }); if ($('td_days_ahead')) v.td_days_ahead = num($('td_days_ahead').value); document.querySelectorAll('.tpi').forEach((el) => { v.trust_points[+el.dataset.i] = el.value; }); };
     $('same').onchange = (e) => { grab(); same = e.target.checked; draw(); };
+    document.querySelectorAll('[data-th]').forEach((b) => (b.onclick = () => { const k = b.dataset.th; if (k === 'auto') useSystemTheme(); else { try { localStorage.setItem('vm-theme', k); } catch {} applyTheme(k); } document.querySelectorAll('[data-th]').forEach((x) => x.classList.toggle('on', x === b)); }));
     $('tpadd')?.addEventListener('click', () => { grab(); v.trust_points.push(''); draw(); document.querySelector('.tpi:last-of-type')?.focus(); });
     document.querySelectorAll('[data-tprm]').forEach((b) => (b.onclick = () => { grab(); v.trust_points.splice(+b.dataset.tprm, 1); draw(); }));
     $('pf').onsubmit = async (e) => {
@@ -1113,5 +1118,8 @@ async function authRedirect() {
 addEventListener('hashchange', route);
 // Telugu / English switch in the header: redraw the same screen in the other language.
 document.addEventListener('click', (e) => { if (e.target.closest('[data-lang]')) { setLang(lang() === 'te' ? 'en' : 'te'); route(); } });
+// Sun / moon button: switch between navy (light) and black + gold (dark).
+document.addEventListener('click', (e) => { if (e.target.closest('[data-theme-btn]')) toggleTheme(); });
+applyTheme(theme());
 initNative();
 authRedirect().then(() => store.getSettings()).then(applySettings).catch(() => {}).finally(route);

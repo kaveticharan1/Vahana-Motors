@@ -77,7 +77,7 @@ Tests (all pass on PostgreSQL 16): `supabase/tests/security-tests.sql` (24 check
 6. Optional: add a Cloudflare Web Analytics token as `cfAnalyticsToken` for free, cookie-free visitor stats.
 
 ## New in v13
-- **Black and gold design** across the showroom and the business area.
+- **Two looks**: light mode is navy + orange, dark mode is black + gold. The app follows the phone's light / dark setting; the sun / moon button in the header (or **Profile → Appearance**) switches it by hand.
 - **Telugu / English** switch in the header (buyer screens). The choice is remembered on the phone.
 - **Sell your car** page (`#/sell`): owners send their car details. The team sees them under **Leads → Sell requests**.
 - **Inspection report and documents** on every car page, filled in from **Edit car**. Cards show "Inspected · 12 of 13 checks passed".

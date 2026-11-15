@@ -570,3 +570,105 @@ details.ibx[open] summary{margin-bottom:10px}
 .tag.bk,.tag.nw,.tag.dr{right:56px}
 .seg a{display:flex;align-items:center;justify-content:center;gap:2px}
 .topwa{white-space:nowrap}
+
+/* ── v14: light mode = navy + orange (dark mode keeps black + gold) ── */
+html[data-theme=light]{color-scheme:light;--p:#0B2A5B;--p-d:#08203F;--on-p:#fff;--p2:#E8EEF8;--gold:#F97316;--acc:#F97316;--acc-d:#EA580C;
+--ink:#0F172A;--ink2:#475569;--mute:#94A3B8;--line:#E3E8F0;--bg:#F5F7FB;--card:#FFFFFF;--card2:#F1F4F9;
+--g:#16A34A;--gbg:#EAF7EF;--a:#D97706;--abg:#FEF4E6;--r:#DC2626;--rbg:#FDEEEE;--wa:#1FAF5A}
+html[data-theme=light] body{background:#EEF2F8}
+html[data-theme=light] body[data-area=buyer]{background:var(--bg)}
+html[data-theme=light] header.top{background:rgba(255,255,255,.92)}
+html[data-theme=light] .brandl small{color:var(--acc)}
+html[data-theme=light] .mark{box-shadow:none}
+html[data-theme=light] .sheet{background:#fff;border-top:0}
+html[data-theme=light] .grab{background:#D7DCE5}
+html[data-theme=light] .fi{border-color:var(--line);color:var(--ink)}
+html[data-theme=light] .fi::placeholder{color:#94A3B8}
+html[data-theme=light] .fi:focus{border-color:var(--p);box-shadow:0 0 0 3px rgba(11,42,91,.12)}
+html[data-theme=light] .cam{border-color:#B8C3D6}
+html[data-theme=light] .car,html[data-theme=light] .list,html[data-theme=light] .ocar,html[data-theme=light] .off,html[data-theme=light] .alert,html[data-theme=light] .sp,html[data-theme=light] .side,html[data-theme=light] .emic,html[data-theme=light] .trust,html[data-theme=light] .insp,html[data-theme=light] .paper,html[data-theme=light] .kv div,html[data-theme=light] .rows,html[data-theme=light] .big,html[data-theme=light] .acard,html[data-theme=light] details.ibx,html[data-theme=light] .sellf{box-shadow:0 1px 3px rgba(15,23,42,.06)}
+html[data-theme=light] .b.pri,html[data-theme=light] .chip.on,html[data-theme=light] .seg button.on,html[data-theme=light] .seg a.on,html[data-theme=light] .days button.on,html[data-theme=light] .slots button.on,html[data-theme=light] .nav .add,html[data-theme=light] .ssteps b{background:var(--acc);color:#fff}
+html[data-theme=light] .b.pri{box-shadow:0 8px 18px -10px rgba(249,115,22,.85)}
+html[data-theme=light] .days button.on small{color:#fff}
+html[data-theme=light] .b.ghost{background:var(--card2)}
+html[data-theme=light] .b.ghost:hover{background:#E6EBF3}
+html[data-theme=light] .b.outline{color:#fff;box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.75)}
+html[data-theme=light] .b.tdb{background:var(--p2);color:var(--p)}
+html[data-theme=light] .topln{border-color:rgba(11,42,91,.35);color:var(--p)}
+html[data-theme=light] .topsell{color:var(--acc);box-shadow:inset 0 0 0 1.5px rgba(249,115,22,.55)}
+html[data-theme=light] .topsv{background:var(--p2);color:var(--p)}
+html[data-theme=light] .topsv i{background:var(--acc);color:#fff}
+html[data-theme=light] .topwa{background:#EAF7EF;color:#15803D}
+html[data-theme=light] .hero{background:linear-gradient(135deg,#0B2A5B 0,#163E7A 60%,#1E4A8C 100%);border:0}
+html[data-theme=light] .hero:before{background:radial-gradient(closest-side,rgba(249,115,22,.22),transparent)}
+html[data-theme=light] .hero h1{color:#fff}
+html[data-theme=light] .hero h1 em{color:#FDBA74}
+html[data-theme=light] .hero p,html[data-theme=light] .sellhero p{color:rgba(255,255,255,.88)}
+html[data-theme=light] .eyebrow{background:rgba(255,255,255,.14);color:#fff}
+html[data-theme=light] .stats div{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.2)}
+html[data-theme=light] .stats b{color:#fff}
+html[data-theme=light] .stats span{color:rgba(255,255,255,.85)}
+html[data-theme=light] .trustbar span{background:#fff}
+html[data-theme=light] .trustbar .i{color:var(--acc)}
+html[data-theme=light] .chip{color:var(--ink2)}
+html[data-theme=light] .pr b,html[data-theme=light] .ibox .price{color:var(--p)}
+html[data-theme=light] .emiline u,html[data-theme=light] .linkbtn,html[data-theme=light] .crumbs a{color:var(--acc-d)}
+html[data-theme=light] .opt.on{background:var(--p2);color:var(--p)}
+html[data-theme=light] .tag,html[data-theme=light] .heart,html[data-theme=light] .gbtn,html[data-theme=light] .arr{background:rgba(255,255,255,.95)}
+html[data-theme=light] .pc.vd{background:var(--acc);color:#fff}
+html[data-theme=light] .art linearGradient:first-of-type stop:first-child{stop-color:#E7EDF6}
+html[data-theme=light] .art linearGradient:first-of-type stop:last-child{stop-color:#F8FAFD}
+html[data-theme=light] .art rect[y="150"]{fill:#E6EAF1}
+html[data-theme=light] .art ellipse{fill:rgba(15,23,42,.18)}
+html[data-theme=light] .insp1,html[data-theme=light] .inspline{background:#EAF7EF;color:#15803D}
+html[data-theme=light] .ring{background:conic-gradient(var(--g) calc(var(--pct)*1%),#E3E8F0 0)}
+html[data-theme=light] .ring b{background:#fff}
+html[data-theme=light] .emiv{background:linear-gradient(135deg,#0B2A5B,#1E4A8C);border:0}
+html[data-theme=light] .emiv b{color:#fff}
+html[data-theme=light] .emic label b{color:var(--acc-d)}
+html[data-theme=light] input[type=range]{background:linear-gradient(90deg,var(--acc) var(--fill,20%),var(--line) var(--fill,20%))}
+html[data-theme=light] input[type=range]::-webkit-slider-thumb{border-color:var(--acc);background:#fff}
+html[data-theme=light] input[type=range]::-moz-range-thumb{border-color:var(--acc);background:#fff}
+html[data-theme=light] .stp button{background:#FFF1E6;color:var(--acc-d)}
+html[data-theme=light] .hero2{background:linear-gradient(135deg,#0B2A5B,#1E4A8C);border:0}
+html[data-theme=light] .hero2 .v{color:#fff}
+html[data-theme=light] .sellhero{background:linear-gradient(135deg,#0B2A5B,#1E4A8C);border:0;color:#fff}
+html[data-theme=light] .sellhero .eyebrow{color:#fff}
+html[data-theme=light] .sellband,html[data-theme=light] .sellcta{background:linear-gradient(135deg,#0B2A5B,#1E4A8C)!important;border:0!important;color:#fff}
+html[data-theme=light] .sellband small,html[data-theme=light] .sellcta p{color:rgba(255,255,255,.85)!important}
+html[data-theme=light] .demo{background:#FEF4E6;color:#92400E}
+html[data-theme=light] .dhint{color:#92400E}
+html[data-theme=light] .timer{color:#92400E}
+html[data-theme=light] .status{background:#FFF3D6;color:#92400E}
+html[data-theme=light] .pitem .box{border-color:#B8C3D6}
+html[data-theme=light] .tri button.on.n{background:#CBD5E1;color:var(--ink)}
+html[data-theme=light] .tri button.on.a{color:#fff}
+html[data-theme=light] .covtag{background:var(--acc);color:#fff}
+html[data-theme=light] .pg div.cover{outline-color:var(--acc)}
+html[data-theme=light] .fi.ai{border-color:#F5A524;background-color:#FFF8E6}
+html[data-theme=light] .aibtn{background:linear-gradient(135deg,#F97316,#EA580C);color:#fff}
+html[data-theme=light] .sk{background:linear-gradient(90deg,#E9EDF3 0,#F4F6FA 50%,#E9EDF3 100%);background-size:200% 100%}
+html[data-theme=light] #toast{background:#0F172A;color:#fff}
+html[data-theme=light] .you{background:var(--acc);color:#fff}
+html[data-theme=light] .alert.gld{border-left-color:var(--acc)}
+html[data-theme=light] .alert.gld .ic3{background:#FFF1E6;color:var(--acc-d)}
+html[data-theme=light] .selcar span{color:var(--acc-d)}
+html[data-theme=light] .nav .add{box-shadow:0 8px 18px -6px rgba(249,115,22,.55)}
+html[data-theme=light] ::selection{background:rgba(249,115,22,.25)}
+@media (min-width:960px){html[data-theme=light] .car:hover{box-shadow:0 18px 40px -18px rgba(11,42,91,.35),0 0 0 1px rgba(249,115,22,.35)}
+html[data-theme=light] .hero{border-bottom:0}}
+.topth{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;color:var(--ink2);border:1px solid var(--line);margin-right:8px;flex:none}
+.topth .moon{display:none}html[data-theme=light] .topth .sun{display:none}html[data-theme=light] .topth .moon{display:block}
+@media (min-width:960px){.topth{width:46px;height:46px;border-radius:14px}}
+@media (max-width:420px){.topth{width:36px;margin-right:4px}}
+
+/* compact header on phones so the name, theme and language buttons all fit */
+@media (max-width:959px){
+  .topin{gap:10px 6px}
+  .topth,.topsv,.topwa{width:38px;height:38px;padding:0;justify-content:center;margin-right:0}
+  .topln{height:38px;padding:0 9px;margin-right:0;font-size:12.5px}
+  .brandl .mark{width:38px;height:38px}
+  .brandl b{font-size:15px;line-height:1.15}
+  .brandl div{min-width:0}
+}
+@media (max-width:370px){.brandl div{display:none}}

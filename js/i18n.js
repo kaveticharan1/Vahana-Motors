@@ -15,6 +15,7 @@ const D = {
   account: ['Account', 'ఖాతా'],
   waUs: ['WhatsApp us', 'వాట్సాప్ చేయండి'],
   langBtn: ['తెలుగు', 'English'],
+  themeAria: ['Switch light or dark look', 'లైట్ / డార్క్ మార్చండి'],
   langAria: ['Change language to Telugu', 'Change language to English'],
   loginAcct: ['Log in / My account', 'లాగిన్ / నా ఖాతా'],
   sellCar: ['Sell your car', 'మీ కారు అమ్మండి'],
