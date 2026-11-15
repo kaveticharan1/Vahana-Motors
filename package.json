@@ -2,7 +2,7 @@
   "name": "vahana-motors",
   "version": "1.0.0",
   "private": true,
-  "description": "Vahana Motors – used car showroom app (web + Android)",
+  "description": "Vahana – used car showroom app (web + Android)",
   "scripts": {
     "www": "node scripts/build-www.mjs",
     "sync": "node scripts/build-www.mjs && npx cap sync android",

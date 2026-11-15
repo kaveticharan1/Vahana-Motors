@@ -5,7 +5,7 @@ import { ic, esc, photo, toast, compressImage, slugify, ask } from './ui.js';
 import { NATIVE, siteBase, saveFile, initNative, tap } from './native.js';
 import { BRANDS, COLOURS, MONTHS, findBrand, findModel, splitName } from './cars-data.js';
 import { t, lang, setLang } from './i18n.js';
-import { applyTheme, toggleTheme, useSystemTheme, themeIsAuto, theme } from './theme.js';
+import { applyTheme, toggleTheme, setThemeMode, themeMode, theme } from './theme.js';
 
 const $app = document.getElementById('app');
 const digits = (s) => String(s || '').replace(/\D/g, '');
@@ -31,7 +31,16 @@ const initials = (n) => n.split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toU
 const ago = (t) => { const h = Math.round((Date.now() - new Date(t)) / 36e5); return h < 1 ? 'just now' : h < 24 ? `${h} hr${h > 1 ? 's' : ''} ago` : `${Math.round(h / 24)} day${h >= 48 ? 's' : ''} ago`; };
 const left = (t) => { const ms = new Date(t) - Date.now(); if (ms <= 0) return null; const d = Math.floor(ms / 864e5), h = Math.floor((ms % 864e5) / 36e5); return d ? `${d} day${d > 1 ? 's' : ''} ${h} hrs` : `${h} hrs ${Math.floor((ms % 36e5) / 6e4)} min`; };
 const skeleton = () => `<header class="top"><div class="wrap topin"><span class="brandl"><img class="mark" src="icons/logo.svg" alt=""><div><b>${esc(CONFIG.businessName)}</b><small>${esc(CONFIG.tagline)}</small></div></span></div></header><div class="wrap"><div class="grid skel" style="margin-top:20px">${'<div class="car"><div class="ph sk"></div><div class="bd"><div class="sk l1"></div><div class="sk l2"></div><div class="sk l3"></div></div></div>'.repeat(3)}</div></div>`;
-function render(html) { $app.innerHTML = html; window.scrollTo(0, 0); }
+// Each new screen fades in; a thin bar at the top shows while a screen is loading.
+function render(html) { $app.innerHTML = html; window.scrollTo(0, 0); $app.classList.remove('enter'); void $app.offsetWidth; $app.classList.add('enter'); }
+let loadT;
+const loading = (on) => { clearTimeout(loadT); if (on) loadT = setTimeout(() => document.body.classList.add('busy'), 120); else document.body.classList.remove('busy'); };
+// Opening animation: shown until the first screen is ready (a little shorter on later visits).
+function hideSplash() {
+  const sp = document.getElementById('splash'); if (!sp) return;
+  const quick = document.documentElement.classList.contains('quick'), wait = Math.max(0, (quick ? 350 : 1500) - (performance.now() - (window.__t0 || 0)));
+  setTimeout(() => { sp.classList.add('out'); try { sessionStorage.setItem('vm-opened', '1'); } catch {} setTimeout(() => sp.remove(), 600); }, wait);
+}
 function fail(e) { console.error(e); toast(e.message || 'Something went wrong. Please try again.'); }
 
 // ═════════════════════════ BUYER EXTRAS ═════════════════════════
@@ -872,7 +881,7 @@ async function profile() {
     <h3 class="psec">Login email</h3>
     <form id="ef" class="fl" novalidate><label for="email">Email used to log in</label><div class="two" style="grid-template-columns:1fr auto;gap:8px"><input class="fi" id="email" type="email" value="${esc(sess.email)}"><button class="b ghost" style="width:auto">Change</button></div><p class="hint" id="emsg">${LIVE ? 'We send a confirmation link to the new email before the change happens.' : ''}</p></form>
     <h3 class="psec">Appearance</h3>
-    <div class="fl"><div class="seg" id="thm">${[['auto', 'Phone setting'], ['light', 'Navy (light)'], ['dark', 'Black + gold']].map(([k, l]) => `<button type="button" data-th="${k}" class="${(themeIsAuto() ? 'auto' : theme()) === k ? 'on' : ''}">${l}</button>`).join('')}</div></div>
+    <div class="fl"><div class="seg" id="thm">${[['light', 'Day (navy)'], ['dark', 'Night (black + gold)'], ['auto', 'Phone setting']].map(([k, l]) => `<button type="button" data-th="${k}" class="${themeMode() === k ? 'on' : ''}">${l}</button>`).join('')}</div></div>
     <h3 class="psec">More</h3>
     <div class="actions" style="grid-template-columns:1fr"><a class="b ghost" href="#/owner/team">${ic('users')}Team: add sales and staff</a><a class="b ghost" href="#/account">${ic('user')}My customer view</a><button class="b ghost" id="csv">${ic('download')}Download backup (Excel / CSV)</button><button class="b ghost" id="link">${ic('share')}Share showroom link</button>
     ${LIVE ? '' : `<button class="b ghost" id="reset">Reset demo data</button>`}<button class="b red" id="out">${ic('logout')}Log out</button></div>
@@ -882,7 +891,7 @@ async function profile() {
     document.querySelectorAll('[data-tdd]').forEach((b) => (b.onclick = () => { $('td_days_ahead').value = Math.min(30, Math.max(1, (num($('td_days_ahead').value) || 7) + Number(b.dataset.tdd))); }));
     const grab = () => { ['business_name', 'tagline', 'whatsapp', 'phone', 'hero_badge'].forEach((k) => { if ($(k)) v[k] = $(k).value; }); if ($('td_days_ahead')) v.td_days_ahead = num($('td_days_ahead').value); document.querySelectorAll('.tpi').forEach((el) => { v.trust_points[+el.dataset.i] = el.value; }); };
     $('same').onchange = (e) => { grab(); same = e.target.checked; draw(); };
-    document.querySelectorAll('[data-th]').forEach((b) => (b.onclick = () => { const k = b.dataset.th; if (k === 'auto') useSystemTheme(); else { try { localStorage.setItem('vm-theme', k); } catch {} applyTheme(k); } document.querySelectorAll('[data-th]').forEach((x) => x.classList.toggle('on', x === b)); }));
+    document.querySelectorAll('[data-th]').forEach((b) => (b.onclick = () => { setThemeMode(b.dataset.th); document.querySelectorAll('[data-th]').forEach((x) => x.classList.toggle('on', x === b)); }));
     $('tpadd')?.addEventListener('click', () => { grab(); v.trust_points.push(''); draw(); document.querySelector('.tpi:last-of-type')?.focus(); });
     document.querySelectorAll('[data-tprm]').forEach((b) => (b.onclick = () => { grab(); v.trust_points.splice(+b.dataset.tprm, 1); draw(); }));
     $('pf').onsubmit = async (e) => {
@@ -1074,6 +1083,7 @@ async function route() {
   document.title = `${CONFIG.businessName} · ${CONFIG.tagline}`;
   const h = location.hash.slice(1) || '/', p = h.split('/').filter(Boolean);
   document.body.dataset.area = p[0] === 'owner' ? 'owner' : 'buyer';
+  loading(true);
   try {
     if (p[0] !== 'owner' && !$app.querySelector('.top')) render(skeleton());
     if (!p.length) return await showroom();
@@ -1100,7 +1110,7 @@ async function route() {
   } catch (e) {
     fail(e);
     render(`<div class="empty">Could not load. Check your internet and try again.<br><br><button class="b ghost sm" onclick="location.reload()">Retry</button></div>`);
-  }
+  } finally { loading(false); }
 }
 // Arrived from a shared /car/<slug> link (Cloudflare): switch to the in-app address.
 { const m = location.pathname.match(/\/car\/([^/]+)\/?$/); if (m) history.replaceState(null, '', `/#/car/${m[1]}`); }
@@ -1122,4 +1132,7 @@ document.addEventListener('click', (e) => { if (e.target.closest('[data-lang]'))
 document.addEventListener('click', (e) => { if (e.target.closest('[data-theme-btn]')) toggleTheme(); });
 applyTheme(theme());
 initNative();
-authRedirect().then(() => store.getSettings()).then(applySettings).catch(() => {}).finally(route);
+window.__t0 = window.__t0 || performance.now();
+authRedirect().then(() => store.getSettings()).then(applySettings).catch(() => {}).finally(() => route().finally(hideSplash));
+// Safety: never keep the opening screen for more than 6 seconds (slow network).
+setTimeout(hideSplash, 6000);
