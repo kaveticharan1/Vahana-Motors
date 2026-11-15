@@ -522,6 +522,109 @@ revoke all on function public.is_owner() from public, anon;
 grant execute on function public.is_owner() to authenticated;
 
 -- ─────────────────────────────────────────────────────────────
+-- 4e. Inspection report, documents and walkaround video (shown to buyers)
+--     Stored on the car, so everyone who can see the car can see them.
+--     Only the team can change them (same rules as the rest of the car).
+-- ─────────────────────────────────────────────────────────────
+alter table public.cars add column if not exists inspection jsonb not null default '{}'::jsonb;
+alter table public.cars add column if not exists docs jsonb not null default '{}'::jsonb;
+alter table public.cars add column if not exists video_url text;
+alter table public.cars drop constraint if exists cars_inspection_check;
+alter table public.cars add constraint cars_inspection_check
+  check (jsonb_typeof(inspection) = 'object' and pg_column_size(inspection) < 4000);
+alter table public.cars drop constraint if exists cars_docs_check;
+alter table public.cars add constraint cars_docs_check
+  check (jsonb_typeof(docs) = 'object' and pg_column_size(docs) < 1000);
+alter table public.cars drop constraint if exists cars_video_url_check;
+alter table public.cars add constraint cars_video_url_check
+  check (video_url is null or (video_url ~ '^https://[^[:space:]]+$' and char_length(video_url) <= 300));
+
+-- ─────────────────────────────────────────────────────────────
+-- 4f. Sell requests: anyone can SEND their car details; only the team can READ them.
+--     A logged-in customer can see their own requests.
+-- ─────────────────────────────────────────────────────────────
+create table if not exists public.sell_requests (
+  id uuid primary key default gen_random_uuid(),
+  name text not null check (char_length(name) between 2 and 60),
+  phone text not null check (phone ~ '^[6-9][0-9]{9}$'),
+  car text not null check (char_length(car) between 2 and 80),
+  year int check (year is null or year between 1990 and 2100),
+  km int check (km is null or km between 0 and 2000000),
+  fuel text check (fuel is null or fuel in ('Diesel','Petrol','CNG','Electric','Hybrid')),
+  expected_price int check (expected_price is null or expected_price between 10000 and 100000000),
+  area text check (area is null or char_length(area) <= 80),
+  note text check (note is null or char_length(note) <= 300),
+  status text not null default 'new' check (status in ('new','called','inspection','listed','closed')),
+  user_id uuid references auth.users (id) on delete set null,
+  created_at timestamptz not null default now()
+);
+alter table public.sell_requests enable row level security;
+
+drop policy if exists "anyone sends sell requests" on public.sell_requests;
+create policy "anyone sends sell requests" on public.sell_requests
+  for insert to anon, authenticated with check (status = 'new');
+drop policy if exists "team manages sell requests" on public.sell_requests;
+create policy "team manages sell requests" on public.sell_requests for all to authenticated
+  using (public.is_team()) with check (public.is_team());
+drop policy if exists "customer reads own sell requests" on public.sell_requests;
+create policy "customer reads own sell requests" on public.sell_requests for select to authenticated using (user_id = auth.uid());
+
+-- Every new request: the database sets the date, status and account itself, and limits spam.
+--   • at most 3 requests per phone number per day
+--   • at most 20 requests across the whole site per 10 minutes
+create or replace function public.sell_guard()
+returns trigger
+language plpgsql security definer set search_path = public
+as $$
+begin
+  new.created_at := now();
+  new.user_id := auth.uid();
+  if public.is_team() then return new; end if;
+  new.status := 'new';
+  if (select count(*) from public.sell_requests where phone = new.phone and created_at > now() - interval '1 day') >= 3 then
+    raise exception 'sell_too_many_phone' using errcode = 'P0001';
+  end if;
+  if (select count(*) from public.sell_requests where created_at > now() - interval '10 minutes') >= 20 then
+    raise exception 'sell_too_many_site' using errcode = 'P0001';
+  end if;
+  return new;
+end;
+$$;
+drop trigger if exists sell_guard on public.sell_requests;
+create trigger sell_guard before insert on public.sell_requests
+  for each row execute function public.sell_guard();
+revoke all on function public.sell_guard() from public, anon, authenticated;
+
+-- ─────────────────────────────────────────────────────────────
+-- 4g. Sale paperwork checklist per car: team only (never public)
+-- ─────────────────────────────────────────────────────────────
+create table if not exists public.car_paperwork (
+  car_id uuid primary key references public.cars (id) on delete cascade,
+  items jsonb not null default '{}'::jsonb check (jsonb_typeof(items) = 'object' and pg_column_size(items) < 2000),
+  updated_by text,
+  updated_at timestamptz not null default now()
+);
+alter table public.car_paperwork enable row level security;
+drop policy if exists "team manages paperwork" on public.car_paperwork;
+create policy "team manages paperwork" on public.car_paperwork for all to authenticated
+  using (public.is_team()) with check (public.is_team());
+
+create or replace function public.paperwork_stamp()
+returns trigger
+language plpgsql security definer set search_path = public
+as $$
+begin
+  new.updated_at := now();
+  new.updated_by := public.my_email();
+  return new;
+end;
+$$;
+drop trigger if exists paperwork_stamp on public.car_paperwork;
+create trigger paperwork_stamp before insert or update on public.car_paperwork
+  for each row execute function public.paperwork_stamp();
+revoke all on function public.paperwork_stamp() from public, anon, authenticated;
+
+-- ─────────────────────────────────────────────────────────────
 -- 6. FIRST ADMIN: add the owner's email once (afterwards, add people from the app's Team page):
 --    insert into public.team (email, name, role) values ('owner@example.com', 'Owner', 'admin');
 -- ─────────────────────────────────────────────────────────────

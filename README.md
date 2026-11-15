@@ -65,6 +65,7 @@ includes offers the owner has confirmed by phone, so it cannot be faked.
 
 Tests (all pass on PostgreSQL 16): `supabase/tests/security-tests.sql` (24 checks) and
 `supabase/tests/negative-tests.sql` (18 checks).
+`supabase/tests/v13-tests.sql` checks sell requests, the paperwork checklist and the inspection / video fields.
 
 ## Moving to Cloudflare Pages (free, business use allowed)
 1. Create a free account at https://dash.cloudflare.com → **Workers & Pages → Create → Pages → Connect to Git**.
@@ -74,6 +75,16 @@ Tests (all pass on PostgreSQL 16): `supabase/tests/security-tests.sql` (24 check
    photo, name and price in WhatsApp (handled by `functions/car/[slug].js`).
 5. **Photo auto-fill (free):** Pages project → Settings → Bindings → Add → **Workers AI**, variable name `AI`. Redeploy. The "Fill details from photos" button in Add a car then works for the logged-in owner (`functions/api/identify.js`). Cloudflare's free plan includes a daily allowance that covers hundreds of photo checks.
 6. Optional: add a Cloudflare Web Analytics token as `cfAnalyticsToken` for free, cookie-free visitor stats.
+
+## New in v13
+- **Black and gold design** across the showroom and the business area.
+- **Telugu / English** switch in the header (buyer screens). The choice is remembered on the phone.
+- **Sell your car** page (`#/sell`): owners send their car details. The team sees them under **Leads → Sell requests**.
+- **Inspection report and documents** on every car page, filled in from **Edit car**. Cards show "Inspected · 12 of 13 checks passed".
+- **Walkaround video**: paste a YouTube (or Shorts) link in **Edit car**; it plays on the car page.
+- **Sale paperwork checklist** on each car in the business area (token, Form 29/30, 29C, NOC, RC transfer, insurance, delivery).
+
+After updating, run `supabase/schema.sql` once more in the SQL Editor. Until then the app keeps working; the new parts simply stay hidden.
 
 ## Upgrading the database
 `supabase/schema.sql` is safe to run again: it adds new columns, rules and limits without touching data.

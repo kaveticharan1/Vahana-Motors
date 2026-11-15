@@ -19,6 +19,8 @@ const MSG = {
   duplicate: 'You have already sent an offer for this car from this number.',
   closed: 'Offers are closed for this car.',
   tooMany: 'This car got many offers in the last hour. Please try again later, or WhatsApp us.',
+  sellMany: 'We already have your details for this number. We will call you soon, or WhatsApp us.',
+  sellBusy: 'Many requests right now. Please try again in a few minutes, or WhatsApp us.',
 };
 const daysAgo = (n) => { const d = new Date(); d.setDate(d.getDate() - n); return iso(d); };
 const uuid = () => (crypto.randomUUID ? crypto.randomUUID() : 'id-' + Math.random().toString(36).slice(2) + Date.now());
@@ -41,6 +43,11 @@ function seed() {
     mk('honda-city-cvt-2019', 'Honda City V CVT', 2019, 52300, 'Petrol', 'Automatic', 1, 'blue', 925000, 19, 850000, 700000, 14, [['Polish', 6000]]),
   ];
   const creta = rows[0].car.id;
+  Object.assign(rows[0].car, {
+    inspection: { items: { engine: 'ok', gearbox: 'ok', clutch: 'ok', suspension: 'ok', tyres: 'fix', battery: 'ok', ac: 'ok', electricals: 'ok', body: 'ok', accident: 'ok', flood: 'ok', odometer: 'ok', interior: 'ok' }, notes: 'Front tyres about 40% left. Small scratch on the rear bumper, polished.', checked_on: daysAgo(40) },
+    docs: { rc: 'yes', insurance: 'yes', noloan: 'yes', challan: 'yes', service: 'yes', keys: 'no' },
+  });
+  Object.assign(rows[2].car, { inspection: { items: { engine: 'ok', gearbox: 'ok', clutch: 'ok', suspension: 'ok', tyres: 'ok', battery: 'ok', ac: 'ok', electricals: 'ok', body: 'ok', accident: 'ok', flood: 'ok', odometer: 'ok', interior: 'ok' }, notes: '', checked_on: daysAgo(10) }, docs: { rc: 'yes', insurance: 'yes', noloan: 'yes', challan: 'yes', service: 'no', keys: 'yes' } });
   return {
     cars: rows.map((r) => r.car),
     costs: rows.map((r) => r.costs),
@@ -49,6 +56,10 @@ function seed() {
       { id: uuid(), car_id: creta, name: 'Anil Reddy', phone: '9849011111', drive_date: daysAgo(-1), slot: '11:00', note: 'Will come with family', status: 'requested', created_at: new Date(Date.now() - 36e5).toISOString() },
       { id: uuid(), car_id: rows[2].car.id, name: 'Priya S.', phone: '9849022222', drive_date: daysAgo(0), slot: '17:00', note: '', status: 'confirmed', created_at: new Date(Date.now() - 864e5).toISOString() },
     ],
+    sells: [
+      { id: uuid(), name: 'Venkat Rao', phone: '9848033333', car: 'Maruti Swift VDI', year: 2019, km: 48000, fuel: 'Diesel', expected_price: 520000, area: 'Gajuwaka', note: 'Single owner, loan closed', status: 'new', created_at: new Date(Date.now() - 5e6).toISOString() },
+    ],
+    paperwork: [],
     offers: [
       { id: uuid(), car_id: creta, name: 'Ravi Kumar', phone: '9848012345', amount: 795000, status: 'confirmed', created_at: new Date(Date.now() - 864e5).toISOString() },
       { id: uuid(), car_id: creta, name: 'Suresh M.', phone: '9000011111', amount: 780000, status: 'new', created_at: new Date(Date.now() - 72e5).toISOString() },
@@ -65,7 +76,7 @@ const safe = (area) => ({
 });
 export const LS = safe('localStorage'), SS = safe('sessionStorage');
 const KEY = 'km-demo-v1';
-const load = () => { try { const d = JSON.parse(LS.getItem(KEY)); if (d && d.cars) { d.drives = d.drives || []; return d; } } catch {} const s = seed(); save(s); return s; };
+const load = () => { try { const d = JSON.parse(LS.getItem(KEY)); if (d && d.cars) { d.drives = d.drives || []; d.sells = d.sells || []; d.paperwork = d.paperwork || []; return d; } } catch {} const s = seed(); save(s); return s; };
 const save = (d) => { try { LS.setItem(KEY, JSON.stringify(d)); } catch (e) { throw new Error('Phone storage is full. Remove some demo photos.'); } };
 // Demo team: emails listed here get that role. Any other email logs in as admin,
 // except emails with "buyer" or "customer" in them, which log in as a customer.
@@ -122,7 +133,7 @@ const demo = {
   async ownerData() {
     // Same limits as the live database: only the admin sees money, staff do not see offers.
     const d = load(), r = demoRole();
-    return { ...d, costs: r === 'admin' ? d.costs : [], expenses: r === 'admin' ? d.expenses : [], offers: r === 'admin' || r === 'sales' ? d.offers : [] };
+    return { ...d, costs: r === 'admin' ? d.costs : [], expenses: r === 'admin' ? d.expenses : [], offers: r === 'admin' || r === 'sales' ? d.offers : [], sells: r ? d.sells : [], paperwork: r ? d.paperwork : [] };
   },
   async saveCar(car, costs) {
     const d = load();
@@ -132,7 +143,7 @@ const demo = {
   },
   async updateCar(id, patch) { const d = load(); Object.assign(d.cars.find((c) => c.id === id), patch); save(d); },
   async markSold(id, price) { const d = load(); Object.assign(d.cars.find((c) => c.id === id), { status: 'sold', sold_on: iso(new Date()) }); const cc = d.costs.find((c) => c.car_id === id); if (cc) cc.sold_price = price; else d.costs.push({ car_id: id, buy_price: 0, loan_amount: 0, interest_rate: 0, bought_on: iso(new Date()), sold_price: price }); save(d); },
-  async deleteCar(id) { const d = load(); for (const k of ['cars']) d[k] = d[k].filter((c) => c.id !== id); for (const k of ['costs', 'expenses', 'offers']) d[k] = d[k].filter((c) => c.car_id !== id); save(d); },
+  async deleteCar(id) { const d = load(); for (const k of ['cars']) d[k] = d[k].filter((c) => c.id !== id); for (const k of ['costs', 'expenses', 'offers', 'drives', 'paperwork']) d[k] = (d[k] || []).filter((c) => c.car_id !== id); save(d); },
   async addExpense(car_id, label, amount) { const d = load(); d.expenses.push({ id: uuid(), car_id, label, amount, spent_on: iso(new Date()) }); save(d); },
   async deleteExpense(id) { const d = load(); d.expenses = d.expenses.filter((e) => e.id !== id); save(d); },
   async setOfferStatus(id, status) { const d = load(); d.offers.find((o) => o.id === id).status = status; save(d); },
@@ -155,6 +166,13 @@ const demo = {
   async saveSettings(v) { let old = {}; try { old = JSON.parse(LS.getItem('km-settings')) || {}; } catch {} LS.setItem('km-settings', JSON.stringify({ ...old, ...v })); },
   async changeEmail(email) { SS.setItem('km-demo-login', email); return 'changed'; },
   async identify(images) { return identifyCall(images, null); },
+  async sendSellRequest(o) {
+    const d = load();
+    if (d.sells.filter((x) => x.phone === o.phone && Date.now() - new Date(x.created_at) < 864e5).length >= 3) throw new Error(MSG.sellMany);
+    d.sells.unshift({ ...o, id: uuid(), status: 'new', created_at: new Date().toISOString(), user: demoMe() || null }); save(d);
+  },
+  async setSellStatus(id, status) { const d = load(); d.sells.find((x) => x.id === id).status = status; save(d); },
+  async savePaperwork(car_id, items) { const d = load(); const row = d.paperwork.find((x) => x.car_id === car_id); if (row) row.items = items; else d.paperwork.push({ car_id, items }); save(d); },
 };
 
 // ───────────────────────── LIVE (Supabase) ─────────────────────────
@@ -173,6 +191,9 @@ function friendly(e) {
   if (m.includes('td_too_many_phone')) return MSG.tdMany;
   if (m.includes('td_bad_date')) return 'Please choose a date in the next few days.';
   if (m.includes('td_bad_slot') || m.includes('td_slot_passed')) return 'That time is not available any more. Please choose another slot.';
+  if (m.includes('sell_too_many_phone')) return MSG.sellMany;
+  if (m.includes('sell_too_many_site')) return MSG.sellBusy;
+  if (m.includes('sell_requests') && /does not exist|schema cache/i.test(m)) return 'Selling is not switched on yet. Please WhatsApp us instead.';
   if (m.includes('td_too_many_site')) return 'Many requests right now. Please try again in a few minutes, or call us.';
   if (m.includes('offers_amount_check')) return 'Please check the offer amount.';
   if (m.includes('offers_phone_check')) return 'Enter a valid 10-digit mobile number.';
@@ -185,16 +206,27 @@ const sb = () => (sbp ||= import('https://cdn.jsdelivr.net/npm/@supabase/supabas
   createClient(CONFIG.supabaseUrl, CONFIG.supabaseAnonKey, { auth: { persistSession: true, autoRefreshToken: true, storage: LS } })));
 const ok = ({ data, error }) => { if (error) throw new Error(error.message); return data; };
 const PUBLIC_COLS = 'id,slug,name,year,km,fuel,transmission,owner_no,colour,insurance_till,description,price,prev_price,status,photos,offers_open,offers_close_at,listed_on,sold_on';
+// Inspection report, documents and video (added in schema v13). Until the owner runs the new schema.sql,
+// the app quietly works without them instead of failing.
+const NEW_COLS = ['inspection', 'docs', 'video_url'];
+let hasNew = true;
+const cols = () => (hasNew ? `${PUBLIC_COLS},${NEW_COLS.join(',')}` : PUBLIC_COLS);
+const missingCol = (e) => e && /column|schema cache/i.test(e.message || '') && NEW_COLS.some((c) => (e.message || '').includes(c));
+async function carQuery(build) {
+  let r = await build(cols());
+  if (r.error && hasNew && missingCol(r.error)) { hasNew = false; r = await build(cols()); }
+  return ok(r);
+}
 
 const live = {
   async counts(c) { const rows = ok(await c.rpc('offer_counts')) || []; return Object.fromEntries(rows.map((r) => [r.car_id, r.interested])); },
   async listCars() {
     const c = await sb();
-    const cars = ok(await c.from('cars').select(PUBLIC_COLS).neq('status', 'sold').order('listed_on', { ascending: false }));
+    const cars = await carQuery((k) => c.from('cars').select(k).neq('status', 'sold').order('listed_on', { ascending: false }));
     const n = await this.counts(c); return cars.map((x) => ({ ...x, interested: n[x.id] || 0 }));
   },
   async getCarBySlug(slug) {
-    const c = await sb(); const car = ok(await c.from('cars').select(PUBLIC_COLS).eq('slug', slug).maybeSingle()); if (!car) return null;
+    const c = await sb(); const car = await carQuery((k) => c.from('cars').select(k).eq('slug', slug).maybeSingle()); if (!car) return null;
     const n = await this.counts(c); return { ...car, interested: n[car.id] || 0 };
   },
   async sendOffer(o) {
@@ -235,14 +267,18 @@ const live = {
   async signOut() { const c = await sb(); await c.auth.signOut(); },
   async ownerData() {
     const c = await sb();
-    const [cars, costs, expenses, offers, drives] = await Promise.all([
+    const [cars, costs, expenses, offers, drives, sells, paperwork] = await Promise.all([
       c.from('cars').select('*').order('listed_on', { ascending: false }), c.from('car_costs').select('*'),
       c.from('expenses').select('*').order('spent_on'), c.from('offers').select('*').order('amount', { ascending: false }),
-      c.from('test_drives').select('*').order('drive_date').order('slot')]);
-    return { cars: ok(cars), costs: ok(costs), expenses: ok(expenses), offers: ok(offers), drives: drives.error ? [] : drives.data };
+      c.from('test_drives').select('*').order('drive_date').order('slot'),
+      c.from('sell_requests').select('*').order('created_at', { ascending: false }), c.from('car_paperwork').select('*')]);
+    const list = ok(cars); if (list.length && !('inspection' in list[0])) hasNew = false;
+    // Tables from newer schema versions may not exist yet: show them as empty.
+    return { cars: list, costs: ok(costs), expenses: ok(expenses), offers: ok(offers), drives: drives.error ? [] : drives.data, sells: sells.error ? [] : sells.data, paperwork: paperwork.error ? [] : paperwork.data };
   },
   async saveCar(car, costs) {
     const c = await sb();
+    if (!hasNew) for (const k of NEW_COLS) delete car[k];
     if (car.id) { const { id, ...rest } = car; const r = await c.from('cars').update(rest).eq('id', id); if (r.error) throw new Error(friendly(r.error)); if (costs) ok(await c.from('car_costs').upsert({ ...costs, car_id: id })); return id; }
     const row = ok(await c.from('cars').insert(car).select('id').single());
     if (costs) ok(await c.from('car_costs').insert({ ...costs, car_id: row.id })); return row.id;
@@ -253,6 +289,9 @@ const live = {
   async addExpense(car_id, label, amount) { const c = await sb(); ok(await c.from('expenses').insert({ car_id, label, amount })); },
   async deleteExpense(id) { const c = await sb(); ok(await c.from('expenses').delete().eq('id', id)); },
   async setOfferStatus(id, status) { const c = await sb(); ok(await c.from('offers').update({ status }).eq('id', id)); },
+  async sendSellRequest(o) { const c = await sb(); const { error } = await c.from('sell_requests').insert(o); if (error) throw new Error(friendly(error)); },
+  async setSellStatus(id, status) { const c = await sb(); ok(await c.from('sell_requests').update({ status }).eq('id', id)); },
+  async savePaperwork(car_id, items) { const c = await sb(); const { error } = await c.from('car_paperwork').upsert({ car_id, items }); if (error) throw new Error(/relation|does not exist|schema cache/i.test(error.message) ? 'Run the new supabase/schema.sql once to turn on the paperwork checklist.' : friendly(error)); },
   async uploadPhotos(carId, blobs) {
     const c = await sb(); const urls = [];
     for (const b of blobs) {

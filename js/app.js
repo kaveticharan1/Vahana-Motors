@@ -4,6 +4,7 @@ import { costSheet, inr, lakh, kmFmt, localISO } from './calc.js';
 import { ic, esc, photo, toast, compressImage, slugify, ask } from './ui.js';
 import { NATIVE, siteBase, saveFile, initNative, tap } from './native.js';
 import { BRANDS, COLOURS, MONTHS, findBrand, findModel, splitName } from './cars-data.js';
+import { t, lang, setLang } from './i18n.js';
 
 const $app = document.getElementById('app');
 const digits = (s) => String(s || '').replace(/\D/g, '');
@@ -13,6 +14,16 @@ const carUrl = (slug) => (CONFIG.prettyLinks && !NATIVE ? `${location.origin}/ca
 const isNew = (c) => c.listed_on && (Date.now() - new Date(c.listed_on + 'T00:00:00')) / 864e5 <= 7;
 const dropped = (c) => c.prev_price && c.prev_price > c.price;
 const ownerLabel = (n) => ['1st', '2nd', '3rd'][n - 1] || `${n}th`;
+const ownerT = (n) => t('owner', { n: lang() === 'te' ? n : ownerLabel(n) });
+const tv = (v) => (['Diesel', 'Petrol', 'CNG', 'Electric', 'Hybrid', 'Manual', 'Automatic'].includes(v) ? t(v) : v);
+// Inspection report and documents: the same lists are used by the owner form and the buyer page.
+const INSP = ['engine', 'gearbox', 'clutch', 'suspension', 'tyres', 'battery', 'ac', 'electricals', 'body', 'accident', 'flood', 'odometer', 'interior'];
+const DOCS = ['rc', 'insurance', 'noloan', 'challan', 'service', 'keys'];
+const inspOf = (c) => (c && c.inspection && c.inspection.items) || {};
+const inspDone = (c) => Object.values(inspOf(c)).filter((v) => v === 'ok' || v === 'fix').length;
+const inspOk = (c) => Object.values(inspOf(c)).filter((v) => v === 'ok').length;
+// YouTube (normal, Shorts, youtu.be) links play inside the page; other links open in a new tab.
+const ytId = (u) => { const m = String(u || '').match(/(?:youtube\.com\/(?:watch\?v=|shorts\/|embed\/)|youtu\.be\/)([\w-]{11})/); return m ? m[1] : null; };
 const go = (h) => { location.hash = h; };
 const demoBar = () => (LIVE ? '' : '<div class="demo">Demo mode · sample cars saved on this phone only</div>');
 const initials = (n) => n.split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase();
@@ -52,21 +63,23 @@ function bindHearts(root = document) {
 
 // ═════════════════════════ BUYERS ═════════════════════════
 const ui = { q: '', fuel: 'all', budget: 'all', sort: 'new' };
-const FUELS = [['all', 'All fuels'], ['Diesel', 'Diesel'], ['Petrol', 'Petrol'], ['CNG', 'CNG']];
-const BUDGETS = [['all', 'Any budget'], ['u5', 'Under ₹5 lakh'], ['5to10', '₹5 – 10 lakh'], ['a10', 'Above ₹10 lakh']];
-const SORTS = [['new', 'Newest first'], ['plh', 'Price: low to high'], ['phl', 'Price: high to low'], ['km', 'Lowest km']];
-const CHIPS = [['all', 'All cars'], ['f:Diesel', 'Diesel'], ['f:Petrol', 'Petrol'], ['f:CNG', 'CNG'], ['b:u5', 'Under ₹5L'], ['b:5to10', '₹5–10L']];
+const FUELS = [['all', 'allFuels'], ['Diesel', 'Diesel'], ['Petrol', 'Petrol'], ['CNG', 'CNG']];
+const BUDGETS = [['all', 'anyBudget'], ['u5', 'u5'], ['5to10', 'b5to10'], ['a10', 'a10']];
+const SORTS = [['new', 'sNew'], ['plh', 'sPlh'], ['phl', 'sPhl'], ['km', 'sKm']];
+const CHIPS = [['all', 'allCars'], ['f:Diesel', 'Diesel'], ['f:Petrol', 'Petrol'], ['f:CNG', 'CNG'], ['b:u5', 'cU5'], ['b:5to10', 'c5to10']];
 const inBudget = (p, b) => b === 'all' || (b === 'u5' && p < 500000) || (b === '5to10' && p >= 500000 && p <= 1000000) || (b === 'a10' && p > 1000000);
 const waLink = (text) => `https://wa.me/${CONFIG.whatsapp}${text ? `?text=${encodeURIComponent(text)}` : ''}`;
 const logoImg = (cls = 'mark') => `<img class="${cls}" src="icons/logo.svg" alt="${esc(CONFIG.businessName)} logo">`;
 const topBar = (withSearch) => `<header class="top"><div class="wrap topin">
   <a class="brandl" href="#/">${logoImg()}<div><b>${esc(CONFIG.businessName)}</b><small>${esc(CONFIG.tagline)}</small></div></a>
-  ${withSearch ? `<label class="search">${ic('search')}<input id="q" type="search" placeholder="Search Creta, Innova, Swift…" value="${esc(ui.q)}" autocomplete="off" aria-label="Search cars"></label>` : '<span class="grow"></span>'}
-  <a class="topsv" href="#/saved" aria-label="Saved cars and test drives">${ic('heart')}<span>Saved</span><i id="favn" class="${favs().length + myDrives().length ? '' : 'hide'}">${favs().length || ''}</i></a>
-  <a class="topsv topac" href="#/account" aria-label="My account">${ic('user')}<span>Account</span></a>
-  <a class="topwa" href="${waLink()}" target="_blank" rel="noopener" aria-label="WhatsApp us">${ic('chat')}<span>WhatsApp us</span></a></div></header>`;
+  ${withSearch ? `<label class="search">${ic('search')}<input id="q" type="search" placeholder="${esc(t('search'))}" value="${esc(ui.q)}" autocomplete="off" aria-label="Search cars"></label>` : '<span class="grow"></span>'}
+  <button class="topln" data-lang aria-label="${t('langAria')}">${t('langBtn')}</button>
+  <a class="topsell" href="#/sell">${ic('tag', 'sm')}<span>${t('sellCar')}</span></a>
+  <a class="topsv" href="#/saved" aria-label="Saved cars and test drives">${ic('heart')}<span>${t('saved')}</span><i id="favn" class="${favs().length + myDrives().length ? '' : 'hide'}">${favs().length || ''}</i></a>
+  <a class="topsv topac" href="#/account" aria-label="My account">${ic('user')}<span>${t('account')}</span></a>
+  <a class="topwa" href="${waLink()}" target="_blank" rel="noopener" aria-label="WhatsApp us">${ic('chat')}<span>${t('waUs')}</span></a></div></header>`;
 const siteFoot = () => `<footer class="sfoot"><div class="wrap"><div class="fl1">${logoImg()}<div><b>${esc(CONFIG.businessName)}</b><small>${esc(CONFIG.tagline)}</small></div></div>
-  <div class="fl2"><a href="${waLink()}" target="_blank" rel="noopener">${ic('chat', 'sm')}WhatsApp</a><a href="tel:${esc(CONFIG.phone)}">${ic('phone', 'sm')}${esc(CONFIG.phone)}</a><a href="#/account">${ic('user', 'sm')}Log in / My account</a></div></div></footer>`;
+  <div class="fl2"><a href="${waLink()}" target="_blank" rel="noopener">${ic('chat', 'sm')}${t('whatsapp')}</a><a href="tel:${esc(CONFIG.phone)}">${ic('phone', 'sm')}${esc(CONFIG.phone)}</a><a href="#/sell">${ic('tag', 'sm')}${t('sellCar')}</a><a href="#/account">${ic('user', 'sm')}${t('loginAcct')}</a></div></div></footer>`;
 
 async function showroom() {
   const cars = await store.listCars();
@@ -78,26 +91,32 @@ async function showroom() {
     const by = { new: (a, b) => (b.listed_on || '').localeCompare(a.listed_on || ''), plh: (a, b) => a.price - b.price, phl: (a, b) => b.price - a.price, km: (a, b) => a.km - b.km }[ui.sort];
     list = [...list].sort(by);
     document.getElementById('grid').innerHTML = list.length ? list.map(card).join('')
-      : `<div class="empty">No cars match these filters. <a href="${waLink('Hi, I am looking for a car. Can you help?')}" target="_blank" rel="noopener" style="color:var(--p);font-weight:700">Tell us on WhatsApp</a> what you want and we will find it.</div>`;
+      : `<div class="empty">${t('noMatch')} <a href="${waLink('Hi, I am looking for a car. Can you help?')}" target="_blank" rel="noopener" style="color:var(--p);font-weight:700">${t('tellWa')}</a> ${t('noMatch2')}</div>`;
     bindHearts(document.getElementById('grid'));
-    document.getElementById('count').textContent = `${list.length} car${list.length === 1 ? '' : 's'}`;
+    document.getElementById('count').textContent = list.length === 1 ? t('oneCar') : t('nCars', { n: list.length });
     document.querySelectorAll('.chip').forEach((b) => { const k = b.dataset.k; b.classList.toggle('on', k === 'all' ? ui.fuel === 'all' && ui.budget === 'all' : k === `f:${ui.fuel}` || k === `b:${ui.budget}`); });
     document.querySelectorAll('[data-fuel]').forEach((b) => b.classList.toggle('on', b.dataset.fuel === ui.fuel));
     document.querySelectorAll('[data-budget]').forEach((b) => b.classList.toggle('on', b.dataset.budget === ui.budget));
     document.querySelectorAll('.sortsel').forEach((s) => { s.value = ui.sort; });
     document.getElementById('clear').classList.toggle('hide', ui.fuel === 'all' && ui.budget === 'all' && !ui.q);
   };
-  const sortSel = `<select class="sortsel" aria-label="Sort cars">${SORTS.map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select>`;
+  const sortSel = `<select class="sortsel" aria-label="Sort cars">${SORTS.map(([k, l]) => `<option value="${k}">${t(l)}</option>`).join('')}</select>`;
+  const checked = cars.filter((c) => inspDone(c)).length;
   render(`${demoBar()}${topBar(true)}
-  <section class="hero"><div class="wrap"><div class="htx">${CONFIG.heroBadge ? `<span class="eyebrow">${ic('shield', 'sm')}${esc(CONFIG.heroBadge)}</span>` : ''}<h1>Find your next car at ${esc(CONFIG.businessName)}</h1><p>Real photos, clear prices and full details. Chat with us on WhatsApp or send a private offer in seconds.</p></div>
-  <div class="stats"><div><b>${cars.length}</b><span>cars available</span></div><div><b>${cars.filter((c) => c.fuel === 'Diesel').length}</b><span>diesel cars</span></div><div><b>${minPrice ? lakh(minPrice) : '—'}</b><span>starting price</span></div></div></div></section>
-  <div class="wrap layout"><aside class="side" aria-label="Filters"><div class="sideh"><b>Filters</b><button id="clear" class="linkbtn hide">Clear all</button></div>
-  <h3>Fuel</h3>${FUELS.map(([k, l]) => `<button class="opt" data-fuel="${k}">${l}</button>`).join('')}
-  <h3>Budget</h3>${BUDGETS.map(([k, l]) => `<button class="opt" data-budget="${k}">${l}</button>`).join('')}
-  <h3>Sort by</h3>${sortSel}
-  <div class="sidecta"><b>Can't find your car?</b><p>Tell us the model and budget. We buy from trusted sources every week.</p><a class="b wa sm" href="${waLink('Hi, I am looking for a car. Can you help?')}" target="_blank" rel="noopener">${ic('chat', 'sm')}Ask on WhatsApp</a></div></aside>
-  <main class="main"><div class="chips">${CHIPS.map(([k, l]) => `<button class="chip" data-k="${k}">${l}</button>`).join('')}</div>
-  <div class="sect"><div><b>Available now</b> <small id="count"></small></div><div class="msort">${sortSel}</div></div><div id="grid" class="grid"></div></main></div>${siteFoot()}`);
+  <section class="hero"><div class="wrap"><div class="htx">${CONFIG.heroBadge ? `<span class="eyebrow">${ic('shield', 'sm')}${esc(CONFIG.heroBadge)}</span>` : ''}<h1>${t('heroTitle', { name: `<em>${esc(CONFIG.businessName)}</em>` })}</h1><p>${t('heroText')}</p>
+  <div class="hcta"><a class="b pri" href="#grid" id="gobrowse">${ic('car')}${t('browse')}</a><a class="b outline" href="#/sell">${ic('tag')}${t('sellCar')}</a></div></div>
+  <div class="stats"><div><b>${cars.length}</b><span>${t('statCars')}</span></div><div><b>${checked || cars.length}</b><span>${checked ? t('statChecked') : t('tr3')}</span></div><div><b>${minPrice ? lakh(minPrice) : '—'}</b><span>${t('statFrom')}</span></div></div></div></section>
+  <div class="trustbar"><div class="wrap">${[['shield', 'tr1'], ['check', 'tr2'], ['cal', 'tr3'], ['trend', 'tr4']].map(([i, k]) => `<span>${ic(i, 'sm')}${t(k)}</span>`).join('')}</div></div>
+  <div class="wrap layout"><aside class="side" aria-label="Filters"><div class="sideh"><b>${t('filters')}</b><button id="clear" class="linkbtn hide">${t('clearAll')}</button></div>
+  <h3>${t('fuel')}</h3>${FUELS.map(([k, l]) => `<button class="opt" data-fuel="${k}">${t(l)}</button>`).join('')}
+  <h3>${t('budget')}</h3>${BUDGETS.map(([k, l]) => `<button class="opt" data-budget="${k}">${t(l)}</button>`).join('')}
+  <h3>${t('sortBy')}</h3>${sortSel}
+  <div class="sidecta"><b>${t('cantFind')}</b><p>${t('cantFindText')}</p><a class="b wa sm" href="${waLink('Hi, I am looking for a car. Can you help?')}" target="_blank" rel="noopener">${ic('chat', 'sm')}${t('askWa')}</a></div>
+  <a class="sidecta sellcta" href="#/sell"><b>${t('sellBandT')}</b><p>${t('sellBandS')}</p><span class="b pri sm">${ic('tag', 'sm')}${t('sellCar')}</span></a></aside>
+  <main class="main"><div class="chips">${CHIPS.map(([k, l]) => `<button class="chip" data-k="${k}">${t(l)}</button>`).join('')}</div>
+  <div class="sect"><div><b>${t('availNow')}</b> <small id="count"></small></div><div class="msort">${sortSel}</div></div><div id="grid" class="grid"></div>
+  <a class="sellband" href="#/sell"><div><b>${t('sellBandT')}</b><small>${t('sellBandS')}</small></div><span class="b pri sm">${t('sellCar')}</span></a></main></div>${siteFoot()}`);
+  document.getElementById('gobrowse').addEventListener('click', (e) => { e.preventDefault(); document.getElementById('grid').scrollIntoView({ behavior: 'smooth', block: 'start' }); });
   document.getElementById('q').addEventListener('input', (e) => { ui.q = e.target.value; draw(); });
   document.querySelectorAll('.chip').forEach((b) => b.addEventListener('click', () => { const k = b.dataset.k;
     if (k === 'all') { ui.fuel = 'all'; ui.budget = 'all'; } else if (k[0] === 'f') ui.fuel = ui.fuel === k.slice(2) ? 'all' : k.slice(2); else ui.budget = ui.budget === k.slice(2) ? 'all' : k.slice(2); draw(); }));
@@ -108,46 +127,50 @@ async function showroom() {
   draw();
 }
 function card(c) {
-  return `<a class="car" href="#/car/${esc(c.slug)}"><div class="ph">${photo(c, c.photos[0])}<span class="tag">${ic('fuel', 'sm')}${esc(c.fuel)}</span>${c.status === 'booked' ? '<span class="tag bk">Booked</span>' : dropped(c) ? `<span class="tag dr">${inr(c.prev_price - c.price)} off</span>` : isNew(c) ? '<span class="tag nw">New</span>' : ''}${c.photos.length > 1 ? `<span class="pc">${ic('camera', 'sm')}${c.photos.length}</span>` : ''}${heartBtn(c.slug)}</div>
-  <div class="bd"><div class="nm">${esc(c.name)}</div><div class="meta"><span>${c.year}</span><span>${kmFmt(c.km)} km</span><span>${ownerLabel(c.owner_no)} owner</span><span>${esc(c.transmission)}</span></div>
-  <div class="pr"><div><b>${lakh(c.price)}</b>${dropped(c) ? ` <s class="was">${lakh(c.prev_price)}</s>` : ''}<small class="emi">EMI from ${inr(emi(c.price))}/mo</small></div>${c.interested ? `<small class="hot">${ic('users', 'sm')}${c.interested} interested</small>` : ''}</div></div></a>`;
+  return `<a class="car" href="#/car/${esc(c.slug)}"><div class="ph">${photo(c, c.photos[0])}<span class="tag">${ic('fuel', 'sm')}${esc(tv(c.fuel))}</span>${c.status === 'booked' ? `<span class="tag bk">${t('booked')}</span>` : dropped(c) ? `<span class="tag dr">${t('off', { v: inr(c.prev_price - c.price) })}</span>` : isNew(c) ? `<span class="tag nw">${t('newTag')}</span>` : ''}${c.photos.length > 1 ? `<span class="pc">${ic('camera', 'sm')}${c.photos.length}</span>` : ''}${c.video_url ? `<span class="pc vd">▶ ${t('videoTag')}</span>` : ''}${heartBtn(c.slug)}</div>
+  <div class="bd"><div class="nm">${esc(c.name)}</div><div class="meta"><span>${c.year}</span><span>${kmFmt(c.km)} km</span><span>${ownerT(c.owner_no)}</span><span>${esc(tv(c.transmission))}</span></div>
+  ${inspDone(c) ? `<div class="insp1">${ic('shield', 'sm')}${t('checkedTag')} · ${t('inspScore', { a: inspOk(c), b: inspDone(c) })}</div>` : ''}
+  <div class="pr"><div><b>${lakh(c.price)}</b>${dropped(c) ? ` <s class="was">${lakh(c.prev_price)}</s>` : ''}<small class="emi">${t('emiFrom', { v: inr(emi(c.price)) })}</small></div>${c.interested ? `<small class="hot">${ic('users', 'sm')}${t('interested', { n: c.interested })}</small>` : ''}</div></div></a>`;
 }
 // Rough EMI estimate: 80% loan, 11% a year, 5 years. Shown with a clear "estimate" note on the car page.
 function emi(price, share = 0.8, rate = 11, months = 60) { const P = price * share, r = rate / 1200; return (P * r * (1 + r) ** months) / ((1 + r) ** months - 1); }
 
 async function carPage(slug) {
   const [c, all] = await Promise.all([store.getCarBySlug(slug), store.listCars()]);
-  if (!c) return render(`${topBar(false)}<div class="wrap"><div class="empty">This car may have been sold. <a href="#/" style="color:var(--p);font-weight:700">See all cars</a></div></div>`);
+  if (!c) return render(`${topBar(false)}<div class="wrap"><div class="empty">${t('maySold')} <a href="#/" style="color:var(--p);font-weight:700">${t('seeAll')}</a></div></div>`);
   addRecent(c.slug);
   const pics = c.photos.length ? c.photos : [null];
   const open = c.status !== 'sold' && c.offers_open && (!c.offers_close_at || new Date(c.offers_close_at) > new Date());
   const wa = waLink(`Hi, I am interested in the ${c.name} (${c.year}, ${kmFmt(c.km)} km) listed at ${lakh(c.price)}.\n${carUrl(c.slug)}`);
   const trust = (CONFIG.trustPoints || []).map((t) => `<li>${ic('check', 'sm')}${esc(t)}</li>`).join('');
   document.title = `${c.name} ${c.year} · ${lakh(c.price)} · ${CONFIG.businessName}`;
-  render(`${demoBar()}${topBar(false)}<div class="wrap crumbs"><a href="#/">${ic('back', 'sm')}All cars</a><span>/</span><span>${esc(c.name)}</span></div>
+  render(`${demoBar()}${topBar(false)}<div class="wrap crumbs"><a href="#/">${ic('back', 'sm')}${t('allCars')}</a><span>/</span><span>${esc(c.name)}</span></div>
   <div class="wrap detail">
   <div class="gal"><div class="gallery"><div class="track" id="trk">${pics.map((p) => `<div>${photo(c, p)}</div>`).join('')}</div>
   <a class="gbtn mback" style="left:16px" href="#/" aria-label="Back">${ic('back')}</a><button class="gbtn mshare" style="right:16px" id="share" aria-label="Share">${ic('share')}</button>${heartBtn(c.slug, 'gbtn gheart')}
   ${pics.length > 1 ? `<button class="arr l" id="prev" aria-label="Previous photo">${ic('back')}</button><button class="arr r" id="next" aria-label="Next photo">${ic('chev')}</button>` : ''}<span class="cnt" id="cnt">1 / ${pics.length}</span></div>
   ${pics.length > 1 ? `<div class="thumbs">${pics.map((p, i) => `<button data-i="${i}" class="${i ? '' : 'on'}" aria-label="Photo ${i + 1}">${photo(c, p)}</button>`).join('')}</div>` : ''}</div>
-  <aside class="dinfo"><div class="ibox"><h1>${esc(c.name)}</h1><div class="sub">${c.year} · ${kmFmt(c.km)} km · ${esc(c.fuel)} · ${esc(c.transmission)}</div>
-  <div class="row"><span class="price">${lakh(c.price)}${dropped(c) ? ` <s class="was">${lakh(c.prev_price)}</s>` : ''}</span>${c.interested ? `<span class="interest">${ic('users', 'sm')}${c.interested} ${c.interested === 1 ? 'person' : 'people'} interested</span>` : ''}</div>
-  ${dropped(c) ? `<div class="dropline">${ic('trend', 'sm')}Price dropped by ${inr(c.prev_price - c.price)}</div>` : ''}<a class="emiline" href="#emi">EMI from <b>${inr(emi(c.price))}/month</b>* · <u>Calculate</u></a>
-  ${c.status === 'booked' ? '<span class="status">Booked · you can still make a backup offer</span>' : ''}${c.status === 'sold' ? '<span class="status">Sold</span>' : ''}
-  <div class="bar"><div class="duo">${c.status !== 'sold' ? `<button class="b tdb" id="td">${ic('cal')}<span>Test drive</span></button>` : ''}${open ? `<button class="b pri" id="offer">${ic('tag')}Make an offer</button>` : ''}</div>
-  <div class="btns"><a class="b wa" href="${wa}" target="_blank" rel="noopener">${ic('chat')}WhatsApp</a><a class="b ghost" href="tel:${esc(CONFIG.phone)}">${ic('phone')}Call</a></div></div>
-  <button class="dshare linkbtn" id="share2">${ic('share', 'sm')}Share this car</button>
+  <aside class="dinfo"><div class="ibox"><h1>${esc(c.name)}</h1><div class="sub">${c.year} · ${kmFmt(c.km)} km · ${esc(tv(c.fuel))} · ${esc(tv(c.transmission))}</div>
+  <div class="row"><span class="price">${lakh(c.price)}${dropped(c) ? ` <s class="was">${lakh(c.prev_price)}</s>` : ''}</span>${c.interested ? `<span class="interest">${ic('users', 'sm')}${c.interested === 1 ? t('personInt') : t('peopleInt', { n: c.interested })}</span>` : ''}</div>
+  ${dropped(c) ? `<div class="dropline">${ic('trend', 'sm')}${t('dropped', { v: inr(c.prev_price - c.price) })}</div>` : ''}<a class="emiline" href="#emi">${t('emiLine', { v: inr(emi(c.price)) })}</a>
+  ${inspDone(c) ? `<a class="inspline" href="#insp">${ic('shield', 'sm')}${t('inspScore', { a: inspOk(c), b: inspDone(c) })}</a>` : ''}
+  ${c.status === 'booked' ? `<span class="status">${t('bookedNote')}</span>` : ''}${c.status === 'sold' ? `<span class="status">${t('sold')}</span>` : ''}
+  <div class="bar"><div class="duo">${c.status !== 'sold' ? `<button class="b tdb" id="td">${ic('cal')}<span>${t('testDrive')}</span></button>` : ''}${open ? `<button class="b pri" id="offer">${ic('tag')}${t('makeOffer')}</button>` : ''}</div>
+  <div class="btns"><a class="b wa" href="${wa}" target="_blank" rel="noopener">${ic('chat')}${t('whatsapp')}</a><a class="b ghost" href="tel:${esc(CONFIG.phone)}">${ic('phone')}${t('call')}</a></div></div>
+  <button class="dshare linkbtn" id="share2">${ic('share', 'sm')}${t('shareCar')}</button>
   ${trust ? `<ul class="trust">${trust}</ul>` : ''}</div></aside>
-  <div class="more"><h2 class="h2">Car details</h2><div class="specs">${[['cal', 'Year', c.year], ['gauge', 'Driven', kmFmt(c.km) + ' km'], ['fuel', 'Fuel', c.fuel], ['user', 'Owner', ownerLabel(c.owner_no)], ['gear', 'Gearbox', c.transmission], ['shield', 'Insurance', c.insurance_till || '—'], ...(c.colour ? [['car', 'Colour', c.colour]] : [])]
-    .map(([i, l, v]) => `<div class="sp">${ic(i)}<small>${l}</small><b>${esc(v)}</b></div>`).join('')}</div>
-  ${c.description ? `<h2 class="h2">From the seller</h2><div class="desc">${esc(c.description)}</div>` : ''}
+  <div class="more">${videoBlock(c)}<h2 class="h2">${t('carDetails')}</h2><div class="specs">${[['cal', 'year', c.year], ['gauge', 'driven', kmFmt(c.km) + ' km'], ['fuel', 'fuel', tv(c.fuel)], ['user', 'ownerL', lang() === 'te' ? `${c.owner_no}వ` : ownerLabel(c.owner_no)], ['gear', 'gearbox', tv(c.transmission)], ['shield', 'insurance', c.insurance_till || '—'], ...(c.colour ? [['car', 'colour', c.colour]] : [])]
+    .map(([i, l, v]) => `<div class="sp">${ic(i)}<small>${t(l)}</small><b>${esc(v)}</b></div>`).join('')}</div>
+  ${inspBlock(c)}
+  ${c.description ? `<h2 class="h2">${t('fromSeller')}</h2><div class="desc">${esc(c.description)}</div>` : ''}
   ${c.status !== 'sold' ? emiCalc(c) : ''}
   ${(() => { const sim = all.filter((x) => x.id !== c.id && (x.fuel === c.fuel || Math.abs(x.price - c.price) <= c.price * 0.3)).sort((a, b) => Math.abs(a.price - c.price) - Math.abs(b.price - c.price)).slice(0, 3);
-    return sim.length ? `<h2 class="h2">Similar cars</h2><div class="grid sim">${sim.map(card).join('')}</div>` : ''; })()}
-  <p class="note">*EMI is an estimate (default: 80% loan at 11% a year over 5 years). Your bank's rate and terms decide the actual EMI.</p></div></div>${siteFoot()}`);
+    return sim.length ? `<h2 class="h2">${t('similar')}</h2><div class="grid sim">${sim.map(card).join('')}</div>` : ''; })()}
+  <p class="note">${t('emiNote')}</p></div></div>${siteFoot()}`);
   bindHearts(); if (c.status !== 'sold') bindEmi(c);
   document.getElementById('td')?.addEventListener('click', () => driveSheet(c));
   document.querySelector('.emiline')?.addEventListener('click', (e) => { e.preventDefault(); document.getElementById('emi')?.scrollIntoView({ behavior: 'smooth', block: 'center' }); });
+  document.querySelector('.inspline')?.addEventListener('click', (e) => { e.preventDefault(); document.getElementById('insp')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); });
   const trk = document.getElementById('trk');
   const goTo = (i) => trk.scrollTo({ left: i * trk.clientWidth, behavior: 'smooth' });
   const cur = () => Math.round(trk.scrollLeft / trk.clientWidth);
@@ -164,14 +187,32 @@ async function carPage(slug) {
   if (open) document.getElementById('offer').addEventListener('click', () => offerSheet(c));
 }
 
+// Inspection report and documents, filled in by the team in "Edit car".
+function inspBlock(c) {
+  const items = inspOf(c), docs = (c && c.docs) || {}, done = inspDone(c), notes = c.inspection?.notes, hasDocs = DOCS.some((k) => docs[k]);
+  if (!done && !hasDocs) return '';
+  const pct = done ? Math.round((inspOk(c) / done) * 100) : 0;
+  const when = c.inspection?.checked_on ? new Date(c.inspection.checked_on + 'T00:00:00').toLocaleDateString(lang() === 'te' ? 'te-IN' : 'en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
+  return `<section class="insp" id="insp">${done ? `<div class="insph"><div class="ring" style="--pct:${pct}"><b>${inspOk(c)}/${done}</b></div><div><h2>${t('inspTitle')}</h2><small>${when ? t('inspOn', { name: esc(CONFIG.businessName), d: when }) : t('inspBy', { name: esc(CONFIG.businessName) })}</small></div></div>
+  <ul class="ilist">${INSP.filter((k) => items[k] === 'ok' || items[k] === 'fix').map((k) => `<li class="${items[k]}">${items[k] === 'ok' ? ic('check', 'sm') : ic('alert', 'sm')}<span>${t('i_' + k)}</span><small>${items[k] === 'ok' ? t('ok') : t('fix')}</small></li>`).join('')}</ul>
+  ${notes ? `<div class="inotes"><b>${t('inspNotes')}</b><p>${esc(notes)}</p></div>` : ''}` : ''}
+  ${hasDocs ? `<h3 class="ih3">${t('docsTitle')}</h3><ul class="dlist">${DOCS.filter((k) => docs[k]).map((k) => `<li class="${docs[k]}">${docs[k] === 'yes' ? ic('check', 'sm') : docs[k] === 'no' ? ic('x', 'sm') : ic('clock', 'sm')}<span>${t('d_' + k)}</span><small>${docs[k] === 'yes' ? t('yes') : docs[k] === 'no' ? t('no') : t('unknown')}</small></li>`).join('')}</ul>` : ''}</section>`;
+}
+function videoBlock(c) {
+  if (!c.video_url) return '';
+  const id = ytId(c.video_url);
+  return `<section class="vid"><h2 class="h2">${t('videoTitle')}</h2>${id ? `<div class="vframe"><iframe src="https://www.youtube-nocookie.com/embed/${esc(id)}?rel=0&playsinline=1" title="${esc(c.name)} video" loading="lazy" allow="accelerometer; encrypted-media; gyroscope; picture-in-picture; fullscreen" allowfullscreen></iframe></div>`
+    : `<a class="b ghost vlink" href="${esc(c.video_url)}" target="_blank" rel="noopener">▶ ${t('watchVideo')}</a>`}</section>`;
+}
+
 // Interactive EMI calculator on the car page.
 function emiCalc(c) {
   const max = Math.round((c.price * 0.9) / 10000) * 10000, dp0 = Math.round((c.price * 0.2) / 10000) * 10000;
-  return `<section class="emic" id="emi"><h2 class="h2" style="margin-top:0">EMI calculator</h2>
-  <div class="emiv"><small>Your monthly EMI</small><b id="emiv">₹0</b><span id="emis"></span></div>
-  <div class="fl"><label for="dp">Down payment <b id="dpv"></b></label><input type="range" id="dp" min="0" max="${max}" step="10000" value="${dp0}"></div>
-  <div class="fl"><label>Loan period</label><div class="seg" id="ten">${[3, 4, 5, 7].map((y) => `<button type="button" data-y="${y}" class="${y === 5 ? 'on' : ''}">${y} yrs</button>`).join('')}</div></div>
-  <div class="fl"><label for="rt">Interest rate (% a year)</label><div class="stp"><button type="button" data-r="-0.5" aria-label="Lower rate">−</button><input class="fi" id="rt" inputmode="decimal" value="11"><button type="button" data-r="0.5" aria-label="Higher rate">+</button></div></div></section>`;
+  return `<section class="emic" id="emi"><h2 class="h2" style="margin-top:0">${t('emiCalc')}</h2>
+  <div class="emiv"><small>${t('yourEmi')}</small><b id="emiv">₹0</b><span id="emis"></span></div>
+  <div class="fl"><label for="dp">${t('downPay')} <b id="dpv"></b></label><input type="range" id="dp" min="0" max="${max}" step="10000" value="${dp0}"></div>
+  <div class="fl"><label>${t('loanPeriod')}</label><div class="seg" id="ten">${[3, 4, 5, 7].map((y) => `<button type="button" data-y="${y}" class="${y === 5 ? 'on' : ''}">${t('yrs', { n: y })}</button>`).join('')}</div></div>
+  <div class="fl"><label for="rt">${t('rate')}</label><div class="stp"><button type="button" data-r="-0.5" aria-label="Lower rate">−</button><input class="fi" id="rt" inputmode="decimal" value="11"><button type="button" data-r="0.5" aria-label="Higher rate">+</button></div></div></section>`;
 }
 function bindEmi(c) {
   const $ = (id) => document.getElementById(id); let years = 5;
@@ -179,7 +220,7 @@ function bindEmi(c) {
     const dp = Number($('dp').value), rate = Math.min(30, Math.max(0, parseFloat($('rt').value) || 0)), P = Math.max(0, c.price - dp), n = years * 12, r = rate / 1200;
     const m = P ? (r ? (P * r * (1 + r) ** n) / ((1 + r) ** n - 1) : P / n) : 0;
     $('dpv').textContent = inr(dp); $('emiv').textContent = inr(m);
-    $('emis').textContent = P ? `Loan ${lakh(P)} · total interest ${inr(Math.max(0, m * n - P))}` : 'No loan needed';
+    $('emis').textContent = P ? t('loanLine', { l: lakh(P), i: inr(Math.max(0, m * n - P)) }) : t('noLoan');
     $('dp').style.setProperty('--fill', `${(dp / (Number($('dp').max) || 1)) * 100}%`);
   };
   $('dp').addEventListener('input', calc); $('rt').addEventListener('input', calc);
@@ -198,16 +239,16 @@ async function driveSheet(c) {
   let day = days.find((d) => free(d).length) || days[0], slot = '';
   const mine = myDrives().find((x) => x.slug === c.slug && x.drive_date >= localISO());
   const wrap = document.createElement('div');
-  wrap.innerHTML = `<div class="scrim"></div><form class="sheet" novalidate><div class="grab"></div><h2>Book a test drive</h2>
-  <div class="mini"><div class="th">${photo(c, c.photos[0])}</div><div><b>${esc(c.name)}</b><small>Free · takes about 30 minutes</small></div></div>
+  wrap.innerHTML = `<div class="scrim"></div><form class="sheet" novalidate><div class="grab"></div><h2>${t('bookTd')}</h2>
+  <div class="mini"><div class="th">${photo(c, c.photos[0])}</div><div><b>${esc(c.name)}</b><small>${t('tdFree')}</small></div></div>
   ${mine ? `<div class="info" style="margin-top:12px">${ic('cal', 'sm')}<span>You already asked for <b>${dayLabel(mine.drive_date, true)}, ${slotLabel(mine.slot)}</b> for this car. You can book another time if you like.</span></div>` : ''}
-  <div class="fl"><label>Day</label><div class="days" id="days"></div></div>
-  <div class="fl"><label>Time</label><div class="slots" id="slots"></div></div>
-  <div class="fl"><label for="nm">Your name</label><input class="fi" id="nm" autocomplete="name" maxlength="60"></div>
-  <div class="fl"><label for="ph">Mobile number</label><input class="fi" id="ph" inputmode="tel" autocomplete="tel" placeholder="10-digit number" maxlength="17"></div>
-  <div class="fl"><label for="nt">Anything we should know? (optional)</label><input class="fi" id="nt" maxlength="200" placeholder="e.g. I will come with family"></div>
-  <div class="info">${ic('lock', 'sm')}<span>Bring your driving licence. ${esc(CONFIG.businessName)} will call you to confirm the time.</span></div>
-  <div class="err" id="err"></div><button class="b pri" style="margin-top:14px" id="send">Request test drive</button></form>`;
+  <div class="fl"><label>${t('day')}</label><div class="days" id="days"></div></div>
+  <div class="fl"><label>${t('time')}</label><div class="slots" id="slots"></div></div>
+  <div class="fl"><label for="nm">${t('yourName')}</label><input class="fi" id="nm" autocomplete="name" maxlength="60"></div>
+  <div class="fl"><label for="ph">${t('mobile')}</label><input class="fi" id="ph" inputmode="tel" autocomplete="tel" placeholder="${t('tenDigit')}" maxlength="17"></div>
+  <div class="fl"><label for="nt">${t('tdNote')}</label><input class="fi" id="nt" maxlength="200" placeholder="${t('tdNoteEg')}"></div>
+  <div class="info">${ic('lock', 'sm')}<span>${t('tdInfo', { name: esc(CONFIG.businessName) })}</span></div>
+  <div class="err" id="err"></div><button class="b pri" style="margin-top:14px" id="send">${t('reqTd')}</button></form>`;
   document.body.appendChild(wrap);
   const $ = (id) => wrap.querySelector('#' + id);
   const prev = jget('vm-me')[0]; if (prev) { $('nm').value = prev.name || ''; $('ph').value = prev.phone || ''; }
@@ -224,7 +265,7 @@ async function driveSheet(c) {
   wrap.querySelector('form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const name = $('nm').value.trim(), phone = digits($('ph').value).replace(/^(91|0)(?=\d{10}$)/, ''), note = $('nt').value.trim();
-    const err = !slot ? 'Choose a time for your test drive.' : !/\p{L}.*\p{L}/u.test(name) ? 'Enter your name.' : !/^[6-9]\d{9}$/.test(phone) ? 'Enter a valid 10-digit mobile number.' : '';
+    const err = !slot ? t('eTime') : !/\p{L}.*\p{L}/u.test(name) ? t('eName') : !/^[6-9]\d{9}$/.test(phone) ? t('ePhone') : '';
     if (err) { $('err').textContent = err; return; }
     $('send').disabled = true; $('send').textContent = 'Booking…';
     try {
@@ -238,7 +279,7 @@ async function driveSheet(c) {
       <div class="btns" style="margin-top:18px"><a class="b wa" href="${waLink(msg)}" target="_blank" rel="noopener">${ic('chat')}Tell us on WhatsApp</a><button type="button" class="b ghost" id="done">Done</button></div></div>`;
       wrap.querySelector('#done').addEventListener('click', () => wrap.remove());
     } catch (ex) {
-      $('err').textContent = ex.message; $('send').disabled = false; $('send').textContent = 'Request test drive';
+      $('err').textContent = ex.message; $('send').disabled = false; $('send').textContent = t('reqTd');
       if (/booked|slot|time/i.test(ex.message)) { try { taken = await store.takenSlots(c.id); } catch {} slot = ''; draw(); }
     }
   });
@@ -272,14 +313,14 @@ function offerSheet(c) {
   const r5 = (n) => Math.round(n / 5000) * 5000;
   const quick = [r5(c.price * 0.95), r5(c.price * 0.97), c.price];
   const wrap = document.createElement('div');
-  wrap.innerHTML = `<div class="scrim"></div><form class="sheet" novalidate><div class="grab"></div><h2>Make an offer</h2>
-  <div class="mini"><div class="th">${photo(c, c.photos[0])}</div><div><b>${esc(c.name)}</b><small>Asking price ${lakh(c.price)}</small></div></div>
-  <div class="amt"><small>Your offer (₹)</small><input id="amt" inputmode="numeric" placeholder="₹0" autocomplete="off"></div>
-  <div class="quick">${quick.map((v, i) => `<button type="button" data-v="${v}">${i === 2 ? 'Full price' : lakh(v)}</button>`).join('')}</div>
-  <div class="fl"><label for="nm">Your name</label><input class="fi" id="nm" autocomplete="name" maxlength="60"></div>
-  <div class="fl"><label for="ph">Mobile number</label><input class="fi" id="ph" inputmode="tel" autocomplete="tel" placeholder="10-digit number" maxlength="17"></div>
-  <div class="info">${ic('lock', 'sm')}<span>Your offer is private: other buyers never see it. ${esc(CONFIG.businessName)} will call you to confirm.${c.offers_close_at ? ` Offers close <b>${new Date(c.offers_close_at).toLocaleString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}</b>.` : ''}</span></div>
-  <div class="err" id="err"></div><button class="b pri" style="margin-top:14px" id="send">Send offer</button></form>`;
+  wrap.innerHTML = `<div class="scrim"></div><form class="sheet" novalidate><div class="grab"></div><h2>${t('makeOffer')}</h2>
+  <div class="mini"><div class="th">${photo(c, c.photos[0])}</div><div><b>${esc(c.name)}</b><small>${t('asking', { v: lakh(c.price) })}</small></div></div>
+  <div class="amt"><small>${t('yourOffer')}</small><input id="amt" inputmode="numeric" placeholder="₹0" autocomplete="off"></div>
+  <div class="quick">${quick.map((v, i) => `<button type="button" data-v="${v}">${i === 2 ? t('fullPrice') : lakh(v)}</button>`).join('')}</div>
+  <div class="fl"><label for="nm">${t('yourName')}</label><input class="fi" id="nm" autocomplete="name" maxlength="60"></div>
+  <div class="fl"><label for="ph">${t('mobile')}</label><input class="fi" id="ph" inputmode="tel" autocomplete="tel" placeholder="${t('tenDigit')}" maxlength="17"></div>
+  <div class="info">${ic('lock', 'sm')}<span>${t('offerPrivate', { name: esc(CONFIG.businessName) })}${c.offers_close_at ? ` Offers close <b>${new Date(c.offers_close_at).toLocaleString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}</b>.` : ''}</span></div>
+  <div class="err" id="err"></div><button class="b pri" style="margin-top:14px" id="send">${t('sendOffer')}</button></form>`;
   document.body.appendChild(wrap);
   const $ = (id) => wrap.querySelector('#' + id);
   const prev = jget('vm-me')[0]; if (prev) { $('nm').value = prev.name || ''; $('ph').value = prev.phone || ''; }
@@ -291,16 +332,55 @@ function offerSheet(c) {
   wrap.querySelector('form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const amount = num($('amt').value), name = $('nm').value.trim(), phone = digits($('ph').value).replace(/^(91|0)(?=\d{10}$)/, '');
-    const err = amount < 10000 ? 'Enter your offer amount.' : amount > c.price * 3 ? `That is more than 3 times the asking price (${lakh(c.price)}). Please check the amount.` : !/\p{L}.*\p{L}/u.test(name) ? 'Enter your name.' : !/^[6-9]\d{9}$/.test(phone) ? 'Enter a valid 10-digit mobile number.' : '';
+    const err = amount < 10000 ? t('eAmount') : amount > c.price * 3 ? `That is more than 3 times the asking price (${lakh(c.price)}). Please check the amount.` : !/\p{L}.*\p{L}/u.test(name) ? t('eName') : !/^[6-9]\d{9}$/.test(phone) ? t('ePhone') : '';
     if (err) { $('err').textContent = err; return; }
-    $('send').disabled = true; $('send').textContent = 'Sending…';
+    $('send').disabled = true; $('send').textContent = t('sending');
     try {
       await store.sendOffer({ car_id: c.id, name, phone, amount });
       jset('vm-me', [{ name, phone }]);
       wrap.querySelector('form').innerHTML = `<div class="grab"></div><div style="text-align:center;padding:16px 0 4px"><div class="round" style="margin:0 auto;width:60px;height:60px;background:var(--gbg);color:var(--g)">${ic('check')}</div><h2 style="margin-top:14px">Offer sent</h2><p class="desc" style="margin:8px 0 0">We received your offer of <b>${inr(amount)}</b>. You will get a call on ${phone.slice(0, 5)} ${phone.slice(5)} soon.</p><button type="button" class="b ghost" style="margin-top:18px" id="done">Done</button></div>`;
       wrap.querySelector('#done').addEventListener('click', () => { wrap.remove(); route(); });
-    } catch (ex) { $('err').textContent = ex.message; $('send').disabled = false; $('send').textContent = 'Send offer'; }
+    } catch (ex) { $('err').textContent = ex.message; $('send').disabled = false; $('send').textContent = t('sendOffer'); }
   });
+}
+
+// "Sell your car": owners leave their car details; the team calls them back (Leads → Sell requests).
+async function sellPage() {
+  document.title = `${t('sellCar')} · ${CONFIG.businessName}`;
+  const prev = jget('vm-me')[0] || {}, yNow = new Date().getFullYear();
+  const f = { fuel: 'Petrol' };
+  render(`${demoBar()}${topBar(false)}<div class="wrap crumbs"><a href="#/">${ic('back', 'sm')}${t('allCars')}</a><span>/</span><span>${t('sellCar')}</span></div>
+  <div class="wrap sellw"><section class="sellhero"><span class="eyebrow">${ic('tag', 'sm')}${esc(CONFIG.businessName)}</span><h1>${t('sellTitle')}</h1><p>${t('sellSub')}</p>
+  <ol class="ssteps">${['sStep1', 'sStep2', 'sStep3'].map((k, i) => `<li><b>${i + 1}</b><span>${t(k)}</span></li>`).join('')}</ol></section>
+  <form class="sellf" id="sf" novalidate>
+  <div class="fl"><label for="sn">${t('yourName')}</label><input class="fi" id="sn" autocomplete="name" maxlength="60" value="${esc(prev.name || '')}"></div>
+  <div class="fl"><label for="sp">${t('mobile')}</label><div class="pre"><span>+91</span><input class="fi" id="sp" inputmode="tel" autocomplete="tel" maxlength="17" placeholder="${t('tenDigit')}" value="${esc(prev.phone || '')}"></div></div>
+  <div class="fl"><label for="sc">${t('carName')}</label><input class="fi" id="sc" maxlength="80" placeholder="${t('carNameEg')}"></div>
+  <div class="pair"><div class="fl"><label for="sy">${t('year')}</label><input class="fi" id="sy" inputmode="numeric" maxlength="4" placeholder="${yNow - 5}"></div><div class="fl"><label for="sk">${t('kmDriven')}</label><input class="fi" id="sk" inputmode="numeric" maxlength="9" placeholder="45000"></div></div>
+  <div class="fl"><label>${t('fuel')}</label><div class="seg" id="sfu">${['Petrol', 'Diesel', 'CNG', 'Electric'].map((v) => `<button type="button" data-v="${v}" class="${v === f.fuel ? 'on' : ''}">${t(v)}</button>`).join('')}</div></div>
+  <div class="fl"><label for="se">${t('expPrice')}</label><input class="fi" id="se" inputmode="numeric" placeholder="₹"><p class="hint" id="seh"></p></div>
+  <div class="fl"><label for="sa">${t('area')}</label><input class="fi" id="sa" maxlength="80" placeholder="${t('areaEg')}"></div>
+  <div class="fl"><label for="so">${t('sellNote')}</label><textarea class="fi" id="so" maxlength="300" placeholder="${t('sellNoteEg')}"></textarea></div>
+  <div class="info">${ic('lock', 'sm')}<span>${t('sellPrivacy')}</span></div>
+  <div class="err" id="serr"></div><button class="b pri" style="margin-top:14px" id="ssend">${t('sendDetails')}</button></form></div>${siteFoot()}`);
+  const $ = (id) => document.getElementById(id);
+  document.querySelectorAll('#sfu button').forEach((b) => (b.onclick = () => { f.fuel = b.dataset.v; document.querySelectorAll('#sfu button').forEach((x) => x.classList.toggle('on', x === b)); }));
+  $('se').addEventListener('input', () => { const v = num($('se').value); $('se').value = v ? '₹' + v.toLocaleString('en-IN') : ''; $('seh').textContent = v ? lakh(v) : ''; });
+  $('sf').onsubmit = async (e) => {
+    e.preventDefault();
+    const name = $('sn').value.trim(), phone = ten($('sp').value), car = $('sc').value.trim(), year = num($('sy').value), km = num($('sk').value), price = num($('se').value);
+    const err = !/\p{L}.*\p{L}/u.test(name) ? t('eName') : !/^[6-9]\d{9}$/.test(phone) ? t('ePhone') : car.length < 2 ? t('eCar') : year && (year < 1990 || year > yNow + 1) ? t('eYear') : '';
+    if (err) { $('serr').textContent = err; return; }
+    $('ssend').disabled = true; $('ssend').textContent = t('sending');
+    try {
+      await store.sendSellRequest({ name, phone, car, year: year || null, km: digits($('sk').value) ? km : null, fuel: f.fuel, expected_price: price >= 10000 ? price : null, area: $('sa').value.trim() || null, note: $('so').value.trim() || null });
+      jset('vm-me', [{ name, phone }]);
+      const msg = `Hi, I want to sell my ${car}${year ? ` (${year}` : ''}${km ? `, ${kmFmt(km)} km` : ''}${year ? ')' : ''}. Sending photos. - ${name}`;
+      $('sf').innerHTML = `<div class="sdone"><div class="round okc">${ic('check')}</div><h2>${t('sellDone')}</h2><p>${t('sellDoneText', { p: `${phone.slice(0, 5)} ${phone.slice(5)}` })}</p>
+      <a class="b wa" href="${waLink(msg)}" target="_blank" rel="noopener">${ic('camera')}${t('sendPhotos')}</a><a class="b ghost" href="#/" style="margin-top:10px">${t('backHome')}</a></div>`;
+      $('sf').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    } catch (ex) { $('serr').textContent = ex.message; $('ssend').disabled = false; $('ssend').textContent = t('sendDetails'); }
+  };
 }
 
 // ═════════════════════════ OWNER ═════════════════════════
@@ -316,12 +396,36 @@ async function guard(roles = ['admin', 'sales', 'staff']) {
   return true;
 }
 // Badge on the Leads tab = new offers + test drives waiting for a call.
-const leadCount = (d) => (d.offers || []).filter((o) => o.status === 'new').length + (d.drives || []).filter((x) => x.status === 'requested' && x.drive_date >= localISO()).length;
+const leadCount = (d) => (d.offers || []).filter((o) => o.status === 'new').length + (d.drives || []).filter((x) => x.status === 'requested' && x.drive_date >= localISO()).length + (d.sells || []).filter((x) => x.status === 'new').length;
 function nav(active, newLeads) {
   const t = (k, h, i, l, extra = '') => `<a href="${h}" class="${active === k ? 'on' : ''}">${ic(i)}${l}${extra}</a>`;
   return `<nav class="nav">${t('home', '#/owner', 'home', 'Home')}${t('stock', '#/owner/stock', 'car', 'Stock')}<a href="#/owner/add" aria-label="Add car"><span class="add">${ic('plus')}</span></a>${t('offers', ROLE === 'staff' ? '#/owner/drives' : '#/owner/offers', 'tag', 'Leads', newLeads ? `<span class="nb">${newLeads}</span>` : '')}${t('more', '#/owner/profile', 'user', 'Profile')}</nav>`;
 }
-const leadTabs = (on) => ROLE === 'staff' ? '' : `<div class="fl" style="margin-top:12px"><div class="seg"><a href="#/owner/offers" class="${on === 'offers' ? 'on' : ''}">Offers</a><a href="#/owner/drives" class="${on === 'drives' ? 'on' : ''}">Test drives</a></div></div>`;
+const leadTabs = (on, d = {}) => { const n = (d.sells || []).filter((x) => x.status === 'new').length;
+  return `<div class="fl" style="margin-top:12px"><div class="seg">${ROLE === 'staff' ? '' : `<a href="#/owner/offers" class="${on === 'offers' ? 'on' : ''}">Offers</a>`}<a href="#/owner/drives" class="${on === 'drives' ? 'on' : ''}">Test drives</a><a href="#/owner/sells" class="${on === 'sells' ? 'on' : ''}">Sell requests${n ? ` <i class="segn">${n}</i>` : ''}</a></div></div>`; };
+
+// People who want to sell their car to the business.
+const SELL_ST = { new: ['a', 'Call back'], called: ['p', 'Called'], inspection: ['p', 'Inspection booked'], listed: ['g', 'Bought / listed'], closed: ['n', 'Closed'] };
+async function sellsPage() {
+  if (!(await guard())) return;
+  const d = await store.ownerData(), list = d.sells || [];
+  const open = list.filter((x) => !['listed', 'closed'].includes(x.status)), done = list.filter((x) => ['listed', 'closed'].includes(x.status));
+  const next = { new: ['called', 'Called'], called: ['inspection', 'Inspection booked'], inspection: ['listed', 'Bought it'] };
+  const item = (x) => { const [cls, lbl] = SELL_ST[x.status] || ['n', x.status], nx = next[x.status];
+    const wa = `https://wa.me/91${x.phone}?text=${encodeURIComponent(`Hi ${x.name}, this is ${CONFIG.businessName} about your ${x.car}. When can we see the car?`)}`;
+    return `<div class="off sel${['listed', 'closed'].includes(x.status) ? ' dim' : ''}"><div class="top"><div class="who"><div class="ava">${esc(initials(x.name))}</div><div><b>${esc(x.name)}</b><small>${ago(x.created_at)}${x.area ? ` · ${esc(x.area)}` : ''}</small></div></div><span class="pill ${cls}">${lbl}</span></div>
+    <div class="selcar"><b>${esc(x.car)}</b><small>${[x.year, x.km != null ? kmFmt(x.km) + ' km' : '', x.fuel].filter(Boolean).join(' · ')}</small>${x.expected_price ? `<span>Expects ${lakh(x.expected_price)}</span>` : ''}</div>
+    ${x.note ? `<p class="dnote">“${esc(x.note)}”</p>` : ''}
+    <div class="acts">${nx ? `<button data-ss="${nx[0]}" data-id="${x.id}" class="${x.status === 'inspection' ? 'gbtn2' : ''}">${ic('check', 'sm')}${nx[1]}</button>` : `<button data-ss="new" data-id="${x.id}">Reopen</button>`}<a href="tel:+91${esc(x.phone)}">${ic('phone', 'sm')}Call</a><a href="${wa}" target="_blank" rel="noopener">${ic('chat', 'sm')}WhatsApp</a></div>
+    ${!['listed', 'closed'].includes(x.status) ? `<div class="sub2"><button type="button" data-ss="closed" data-id="${x.id}">Not interested / close</button></div>` : ''}</div>`; };
+  render(`${demoBar()}<div class="topbar"><b>Leads</b></div>${leadTabs('sells', d)}
+  <p class="desc tintro">People who want to sell their car to you. Call them, book a free inspection, then add the car with + once you buy it.</p>
+  ${open.length ? `<div class="sect"><b>To do</b><small>${open.length}</small></div>${open.map(item).join('')}` : '<div class="empty">No sell requests yet. Share your showroom link: buyers and sellers both use it.</div>'}
+  ${done.length ? `<div class="sect"><b>Finished</b></div>${done.slice(0, 30).map(item).join('')}` : ''}${nav('offers', leadCount(d))}`);
+  document.querySelectorAll('[data-ss]').forEach((b) => (b.onclick = async () => {
+    try { await store.setSellStatus(b.dataset.id, b.dataset.ss); toast(b.dataset.ss === 'listed' ? 'Great! Tap + to add the car to your stock.' : 'Updated'); sellsPage(); } catch (ex) { fail(ex); }
+  }));
+}
 
 async function drivesPage() {
   if (!(await guard())) return;
@@ -342,7 +446,7 @@ async function drivesPage() {
     <a href="tel:+91${esc(x.phone)}">${ic('phone', 'sm')}Call</a><a href="${wa}" target="_blank" rel="noopener">${ic('chat', 'sm')}WhatsApp</a></div>
     ${open ? `<div class="sub2"><button type="button" data-ds="cancelled" data-id="${x.id}">Cancel</button>${x.drive_date <= t ? `<button type="button" data-ds="no_show" data-id="${x.id}">Didn't come</button>` : ''}</div>` : ''}</div>`;
   };
-  render(`${demoBar()}<div class="topbar"><b>Leads</b></div>${leadTabs('drives')}
+  render(`${demoBar()}<div class="topbar"><b>Leads</b></div>${leadTabs('drives', d)}
   ${groups.length ? groups.map((g) => `<div class="sect"><b>${dayLabel(g, true)}</b><small>${active.filter((x) => x.drive_date === g).length} booked</small></div>${active.filter((x) => x.drive_date === g).map(item).join('')}`).join('') : '<div class="empty">No upcoming test drives. Buyers can book one from any car page.</div>'}
   ${earlier.length ? `<div class="sect"><b>Earlier</b></div>${earlier.map(item).join('')}` : ''}${nav('offers', leadCount(d))}`);
   document.querySelectorAll('[data-ds]').forEach((b) => (b.onclick = async () => {
@@ -422,10 +526,13 @@ async function dashboard() {
   ${numbersMissing() ? `<a class="alert amb" href="#/owner/profile"><div class="ic3">${ic('phone')}</div><div><b>Add your WhatsApp number</b><small>Buyers can't reach you until it's set. Tap to open Profile.</small></div></a>` : ''}
   ${tdToday || tdAsk ? `<a class="alert grn" href="#/owner/drives"><div class="ic3">${ic('cal')}</div><div><b>${tdToday ? `${tdToday} test drive${tdToday > 1 ? 's' : ''} today` : `${tdAsk} test drive request${tdAsk > 1 ? 's' : ''}`}</b><small>${tdAsk ? `${tdAsk} waiting for your call to confirm` : 'All confirmed. Keep the cars clean and ready.'}</small></div></a>` : ''}
   ${newOffers ? `<a class="alert blu" href="#/owner/offers"><div class="ic3">${ic('tag')}</div><div><b>${newOffers} new offer${newOffers > 1 ? 's' : ''} to call back</b><small>Confirm them by phone to count them</small></div></a>` : ''}
+  ${sellAlert(raw)}
   <div class="sect"><b>Stock, oldest first</b><a href="#/owner/stock">See all</a></div>
-  <div class="list">${stock.length ? stock.map(row).join('') : '<div class="empty">No cars yet. Tap + to add your first car.</div>'}</div>${nav('home', newOffers + tdAsk)}`);
+  <div class="list">${stock.length ? stock.map(row).join('') : '<div class="empty">No cars yet. Tap + to add your first car.</div>'}</div>${nav('home', leadCount(raw))}`);
 }
 const nice = (d) => (d ? new Date(d + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : '');
+const sellAlert = (raw) => { const n = (raw.sells || []).filter((x) => x.status === 'new').length;
+  return n ? `<a class="alert gld" href="#/owner/sells"><div class="ic3">${ic('car')}</div><div><b>${n} ${n > 1 ? 'people want' : 'person wants'} to sell a car</b><small>Call back and book a free inspection</small></div></a>` : ''; };
 const row = (c) => `<a class="it" href="#/owner/car/${c.id}"><div class="th">${photo(c, c.photos[0])}</div><div class="m"><b>${esc(c.name)}</b><small>${c.status === 'sold' ? `Sold ${nice(c.sold_on)}` : ADMIN() ? `Cost so far ${inr(c.cs.total)}` : `${lakh(c.price)}${c.status === 'booked' ? ' · Booked' : ''}`}</small></div>${c.status === 'sold' ? '<span class="pill n">Sold</span>' : `<span class="pill ${c.cs.age}">${c.cs.days} days</span>`}</a>`;
 
 async function stockPage() {
@@ -461,13 +568,33 @@ async function costPage(id) {
   <form id="ex" class="fl"><label>Add an expense</label><div class="two" style="grid-template-columns:1.4fr 1fr auto;display:grid;gap:8px"><input class="fi" id="el" placeholder="e.g. Tyres" maxlength="60"><input class="fi" id="ea" inputmode="numeric" placeholder="₹ amount"><button class="b pri" style="width:50px;padding:0" aria-label="Add">${ic('plus')}</button></div></form>
   <div class="actions"><a class="b ghost sm" href="#/owner/offers/${c.id}">${ic('tag', 'sm')}Offers (${live})</a><a class="b ghost sm" href="#/car/${esc(c.slug)}">${ic('car', 'sm')}Showroom page</a>
   ${c.status === 'sold' ? `<button class="b ghost sm" data-st="available">Mark available</button>` : `<button class="b ghost sm" data-st="${c.status === 'booked' ? 'available' : 'booked'}">${c.status === 'booked' ? 'Unbook' : 'Mark booked'}</button><button class="b green sm" id="sold">${ic('check', 'sm')}Mark sold</button>`}
-  </div><div class="actions" style="grid-template-columns:1fr"><button class="b red sm" id="del">${ic('trash', 'sm')}Delete car</button></div>${nav('', 0)}`);
+  </div>${paperCard(c, raw)}<div class="actions" style="grid-template-columns:1fr"><button class="b red sm" id="del">${ic('trash', 'sm')}Delete car</button></div>${nav('', 0)}`);
+  bindPaper(c, raw, () => costPage(id));
   document.getElementById('ex').onsubmit = async (e) => { e.preventDefault(); const l = document.getElementById('el').value.trim(), a = num(document.getElementById('ea').value);
     if (!l || !a) return toast('Enter what it was for and the amount.'); try { await store.addExpense(c.id, l, a); toast('Expense added'); costPage(id); } catch (ex) { fail(ex); } };
   document.querySelectorAll('[data-del]').forEach((b) => (b.onclick = async () => { if (await ask('Remove expense?', 'This expense will be removed from the cost sheet.', 'Remove', true)) { try { await store.deleteExpense(b.dataset.del); costPage(id); } catch (ex) { fail(ex); } } }));
   document.querySelectorAll('[data-st]').forEach((b) => (b.onclick = async () => { try { await store.updateCar(c.id, { status: b.dataset.st, ...(b.dataset.st === 'available' ? { sold_on: null } : {}) }); costPage(id); } catch (ex) { fail(ex); } }));
   document.getElementById('sold')?.addEventListener('click', () => soldSheet(c));
   document.getElementById('del').onclick = async () => { if (await ask(`Delete ${c.name}?`, 'The car, its costs and all its offers will be deleted. This cannot be undone.', 'Delete car', true)) { try { await store.deleteCar(c.id); toast('Car deleted'); go('#/owner'); } catch (ex) { fail(ex); } } };
+}
+
+// Sale paperwork: one checklist per car so no document is missed between booking and handover.
+const PAPERS = [
+  ['token', 'Token / advance received'], ['buyer_id', 'Buyer ID and address proof copied'], ['form29_30', 'Form 29 and 30 signed by the seller'],
+  ['form29c', 'Form 29C filed on VAHAN (when we hold the car)'], ['noc', 'Bank NOC / Form 35 (if the car had a loan)'], ['payment', 'Full payment received'],
+  ['rc_applied', 'RC transfer applied at the RTO'], ['insurance', 'Insurance moved to the buyer'], ['delivery', 'Delivery note signed, car and both keys handed over'], ['rc_done', 'New RC received by the buyer'],
+];
+function paperCard(c, raw) {
+  const items = (raw.paperwork || []).find((x) => x.car_id === c.id)?.items || {}, done = PAPERS.filter(([k]) => items[k]).length;
+  return `<section class="paper" id="paper"><div class="paperh"><div><b>Sale paperwork</b><small>${done ? `${done} of ${PAPERS.length} done` : 'Tick each step as it is done'}</small></div><div class="pbar"><i style="width:${(done / PAPERS.length) * 100}%"></i></div></div>
+  ${PAPERS.map(([k, l]) => `<label class="pitem${items[k] ? ' on' : ''}"><input type="checkbox" data-pp="${k}" ${items[k] ? 'checked' : ''}><span class="box">${ic('check', 'sm')}</span><span>${l}${items[k] && items[k] !== true ? `<small>${esc(nice(items[k]))}</small>` : ''}</span></label>`).join('')}</section>`;
+}
+function bindPaper(c, raw, again) {
+  document.querySelectorAll('[data-pp]').forEach((b) => (b.onchange = async () => {
+    const row = (raw.paperwork || []).find((x) => x.car_id === c.id), items = { ...(row?.items || {}) };
+    if (b.checked) items[b.dataset.pp] = localISO(); else delete items[b.dataset.pp];
+    try { await store.savePaperwork(c.id, items); again(); } catch (ex) { b.checked = !b.checked; fail(ex); }
+  }));
 }
 
 function soldSheet(c) {
@@ -490,7 +617,7 @@ async function offersPage(id) {
   const raw = await store.ownerData(), all = enrich(raw), newCount = leadCount(raw);
   if (!id) {
     const withOffers = all.filter((c) => c.offers.length).sort((a, b) => b.offers.filter((o) => o.status === 'new').length - a.offers.filter((o) => o.status === 'new').length);
-    return render(`${demoBar()}<div class="topbar"><b>Leads</b></div>${leadTabs('offers')}<div class="sect" style="padding-top:14px"><b>Cars with offers</b></div><div class="list">${withOffers.length ? withOffers.map((c) => {
+    return render(`${demoBar()}<div class="topbar"><b>Leads</b></div>${leadTabs('offers', raw)}<div class="sect" style="padding-top:14px"><b>Cars with offers</b></div><div class="list">${withOffers.length ? withOffers.map((c) => {
       const top = Math.max(...c.offers.filter((o) => o.status !== 'rejected').map((o) => o.amount), 0), n = c.offers.filter((o) => o.status === 'new').length;
       return `<a class="it" href="#/owner/offers/${c.id}"><div class="th">${photo(c, c.photos[0])}</div><div class="m"><b>${esc(c.name)}</b><small>${c.offers.length} offer${c.offers.length > 1 ? 's' : ''}${top ? ` · best ${inr(top)}` : ''}</small></div>${n ? `<span class="pill a">${n} new</span>` : ''}</a>`; }).join('') : '<div class="empty">No offers yet. Share your car links on WhatsApp to get buyers.</div>'}</div>${nav('offers', newCount)}`);
   }
@@ -537,7 +664,11 @@ async function carForm(id) {
     price: d ? d.price : '', description: d ? d.description || '' : '',
     buy_price: d && d.costs ? d.costs.buy_price : '', bought_on: d && d.costs ? d.costs.bought_on : today, loan_amount: d && d.costs ? d.costs.loan_amount || '' : '', interest_rate: d && d.costs ? d.costs.interest_rate || '' : '',
     offers_open: d ? d.offers_open : true, offers_close_at: d ? d.offers_close_at || '' : '', pics: d ? d.photos.map((u) => ({ url: u })) : [],
+    insp: { ...(d?.inspection?.items || {}) }, inspNotes: d?.inspection?.notes || '', inspOn: d?.inspection?.checked_on || '', docs: { ...(d?.docs || {}) }, video_url: d?.video_url || '',
   };
+  const ILBL = { engine: 'Engine', gearbox: 'Gearbox', clutch: 'Clutch and brakes', suspension: 'Suspension and steering', tyres: 'Tyres', battery: 'Battery', ac: 'AC', electricals: 'Lights and electricals', body: 'Body and paint', accident: 'No major accident damage', flood: 'No flood damage', odometer: 'Odometer genuine', interior: 'Interior and seats' };
+  const DLBL = { rc: 'Original RC available', insurance: 'Insurance valid', noloan: 'No loan (or NOC ready)', challan: 'No pending challans', service: 'Service records', keys: 'Both keys' };
+  const tri = (grp, k, opts) => `<div class="tri" data-grp="${grp}" data-key="${k}">${opts.map(([v, l, cls]) => `<button type="button" data-v="${v}" class="${cls}${(f[grp][k] || '') === v ? ' on' : ''}">${l}</button>`).join('')}</div>`;
   const aiSet = new Set();
   let step = 1;
   const LAST = ADMIN() ? 3 : 1; // Sales and Staff never see buying cost or loan.
@@ -569,7 +700,15 @@ async function carForm(id) {
       <div class="fl"><label for="insM">Insurance valid till</label><div class="two" style="gap:8px"><select class="fi" id="insM"><option value="">Month</option>${MONTHS.map((m) => opt(m, m, f.insM)).join('')}${opt('NA', 'None', f.insM)}</select><select class="fi" id="insY" ${f.insM === 'NA' ? 'disabled' : ''}><option value="">Year</option>${[yNow - 1, yNow, yNow + 1, yNow + 2, yNow + 3].map((y) => opt(y, y, f.insY)).join('')}</select></div></div></div>
       ${f.colourSel === 'Other' ? `<div class="fl"><label for="colourOther">Colour name</label><input class="fi${ai('colourOther')}" id="colourOther" maxlength="20" value="${esc(f.colourOther)}" placeholder="e.g. Pearl white"></div>` : ''}
       ${stepper('price', 'Asking price (₹)', 5000, 'inputmode="numeric" placeholder="e.g. 525000"', moneyHint('price'))}
-      <div class="fl"><label for="description">Notes for buyers (optional)</label><textarea class="fi" id="description" maxlength="500" placeholder="Single owner, all service records, new tyres…">${esc(f.description || '')}</textarea></div>`
+      <div class="fl"><label for="description">Notes for buyers (optional)</label><textarea class="fi" id="description" maxlength="500" placeholder="Single owner, all service records, new tyres…">${esc(f.description || '')}</textarea></div>
+      <div class="fl"><label for="video_url">Walkaround video link (optional)</label><input class="fi" id="video_url" inputmode="url" maxlength="300" value="${esc(f.video_url)}" placeholder="YouTube Shorts or Instagram link"><p class="hint">YouTube videos play right on the car page. Film 60 seconds: outside, inside, engine start, a short drive.</p></div>
+      <details class="ibx" ${Object.keys(f.insp).length ? 'open' : ''}><summary><b>Inspection report</b><small>Shown to buyers · ${Object.values(f.insp).filter(Boolean).length} of ${INSP.length} checked</small></summary>
+      <p class="hint" style="margin:0 0 10px">Only mark what you actually checked. Leave the rest on “–”.</p>
+      ${INSP.map((k) => `<div class="irow"><span>${ILBL[k]}</span>${tri('insp', k, [['ok', 'Good', 'g'], ['fix', 'Fix', 'a'], ['', '–', 'n']])}</div>`).join('')}
+      <div class="fl" style="margin:12px 0 0"><label for="inspNotes">Inspection notes for buyers</label><textarea class="fi" id="inspNotes" maxlength="400" placeholder="e.g. Front tyres 40% left. Small scratch on rear bumper.">${esc(f.inspNotes)}</textarea></div>
+      <div class="fl" style="margin:12px 0 0"><label for="inspOn">Checked on</label><input class="fi" id="inspOn" type="date" max="${today}" value="${esc(f.inspOn)}"></div></details>
+      <details class="ibx" ${Object.keys(f.docs).length ? 'open' : ''}><summary><b>Documents</b><small>Shown to buyers</small></summary>
+      ${DOCS.map((k) => `<div class="irow"><span>${DLBL[k]}</span>${tri('docs', k, [['yes', 'Yes', 'g'], ['no', 'No', 'r'], ['', '–', 'n']])}</div>`).join('')}</details>`
       : step === 2 ? `<div class="slabel">Step 2 of 3</div><div class="stitle">Buying cost</div><p class="desc">Only you can see this. Add repair and other expenses later on the cost sheet.</p>
       ${stepper('buy_price', 'Bought for (₹)', 5000, 'inputmode="numeric"', moneyHint('buy_price'))}<div class="fl"><label for="bought_on">Bought on</label><input class="fi" id="bought_on" type="date" value="${esc(f.bought_on)}" max="${today}"></div>`
       : `<div class="slabel">Step 3 of 3</div><div class="stitle">Loan and offers</div><p class="desc">Interest is counted every day from the date you bought the car. Leave empty if there is no loan.</p>
@@ -594,6 +733,12 @@ async function carForm(id) {
       el.value = v; el.dispatchEvent(new Event('input')); aiSet.delete(k);
     }));
     document.querySelectorAll('[data-h]').forEach((h) => $(h.dataset.h).addEventListener('input', (e) => { h.textContent = num(e.target.value) ? lakh(num(e.target.value)) : ''; }));
+    document.querySelectorAll('.tri').forEach((g) => g.querySelectorAll('button').forEach((b) => (b.onclick = () => {
+      const grp = g.dataset.grp, k = g.dataset.key; if (b.dataset.v) f[grp][k] = b.dataset.v; else delete f[grp][k];
+      g.querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b));
+      if (grp === 'insp' && b.dataset.v && $('inspOn') && !$('inspOn').value) { $('inspOn').value = today; f.inspOn = today; }
+      const sm = g.closest('details')?.querySelector('summary small'); if (sm && grp === 'insp') sm.textContent = `Shown to buyers · ${Object.values(f.insp).filter(Boolean).length} of ${INSP.length} checked`;
+    })));
     $('pick')?.addEventListener('change', async (e) => {
       for (const file of e.target.files) { try { const blob = await compressImage(file, LIVE ? 1280 : 640, LIVE ? 0.72 : 0.6); f.pics.push({ blob, url: URL.createObjectURL(blob) }); } catch (ex) { fail(ex); } }
       collect(); draw();
@@ -615,7 +760,8 @@ async function carForm(id) {
         const car = { name, brand: f.brand === 'Other' ? f.brandOther.trim() || null : f.brand, model: f.model === 'Other' || f.brand === 'Other' ? f.modelOther.trim() || null : f.model, variant: f.variant.trim() || null,
           year: num(f.year), km: num(f.km), fuel: f.fuel, transmission: f.transmission, owner_no: Number(f.owner_no), colour: colour || null,
           insurance_till: f.insM === 'NA' ? 'Not available' : f.insM && f.insY ? `${f.insM} ${f.insY}` : null,
-          description: f.description.trim() || null, price: num(f.price), photos, offers_open: !!f.offers_open, offers_close_at: f.offers_close_at ? new Date(f.offers_close_at).toISOString() : null };
+          description: f.description.trim() || null, price: num(f.price), photos, offers_open: !!f.offers_open, offers_close_at: f.offers_close_at ? new Date(f.offers_close_at).toISOString() : null,
+          inspection: Object.keys(f.insp).length || f.inspNotes.trim() ? { items: f.insp, notes: f.inspNotes.trim(), checked_on: f.inspOn || today } : {}, docs: f.docs, video_url: f.video_url.trim() || null };
         if (d) car.id = d.id; else car.slug = slug;
         const costs = { buy_price: num(f.buy_price), bought_on: f.bought_on || today, loan_amount: num(f.loan_amount), interest_rate: Number(String(f.interest_rate || 0).replace(/[^\d.]/g, '')) || 0 };
         const newId = await store.saveCar(car, ADMIN() ? costs : null);
@@ -667,6 +813,7 @@ async function carForm(id) {
       if (!digits(f.km)) return 'Enter KM driven.';
       if (num(f.price) < 10000) return 'Enter the asking price.';
       if (f.insM && f.insM !== 'NA' && !f.insY) return 'Choose the insurance year.';
+      if (f.video_url.trim() && !/^https:\/\/\S+$/.test(f.video_url.trim())) return 'The video link must start with https://';
     }
     if (step === 2 && !num(f.buy_price)) return 'Enter the price you bought it for.';
     if (step === 3) { const r = Number(String(f.interest_rate || 0).replace(/[^\d.]/g, '')); if (num(f.loan_amount) && !(r > 0 && r <= 60)) return 'Enter the interest rate, e.g. 15.'; }
@@ -864,6 +1011,7 @@ function teamHome(all, raw, sess) {
   <div class="hero2"><small>Cars in stock</small><div class="v">${stock.length}</div><div class="sub"><div>Test drives today<b>${tdToday}</b></div><div>Booked cars<b>${stock.filter((c) => c.status === 'booked').length}</b></div>${ROLE === 'sales' ? `<div>New offers<b>${newOffers}</b></div>` : `<div>To confirm<b>${tdAsk}</b></div>`}</div></div>
   ${tdToday || tdAsk ? `<a class="alert grn" href="#/owner/drives"><div class="ic3">${ic('cal')}</div><div><b>${tdToday ? `${tdToday} test drive${tdToday > 1 ? 's' : ''} today` : `${tdAsk} test drive request${tdAsk > 1 ? 's' : ''}`}</b><small>${tdAsk ? `${tdAsk} waiting for a call to confirm` : 'All confirmed. Keep the cars clean and ready.'}</small></div></a>` : ''}
   ${ROLE === 'sales' && newOffers ? `<a class="alert blu" href="#/owner/offers"><div class="ic3">${ic('tag')}</div><div><b>${newOffers} new offer${newOffers > 1 ? 's' : ''} to call back</b><small>Confirm them by phone</small></div></a>` : ''}
+  ${sellAlert(raw)}
   <div class="sect"><b>Stock, oldest first</b><a href="#/owner/stock">See all</a></div>
   <div class="list">${stock.length ? stock.map(row).join('') : '<div class="empty">No cars yet. Tap + to add a car.</div>'}</div>${nav('home', leadCount(raw))}`);
 }
@@ -879,7 +1027,8 @@ function carManage(c, raw) {
   <div class="actions">${ROLE === 'sales' ? `<a class="b ghost sm" href="#/owner/offers/${c.id}">${ic('tag', 'sm')}Offers (${offers})</a>` : ''}<a class="b ghost sm" href="#/owner/drives">${ic('cal', 'sm')}Test drives</a>
   <a class="b ghost sm" href="#/car/${esc(c.slug)}">${ic('car', 'sm')}Showroom page</a><a class="b ghost sm" href="#/owner/edit/${c.id}">${ic('edit', 'sm')}Edit details</a>
   ${c.status !== 'sold' ? `<button class="b ghost sm" data-st="${c.status === 'booked' ? 'available' : 'booked'}">${c.status === 'booked' ? 'Unbook' : 'Mark booked'}</button>` : ''}</div>
-  <p class="foot">Only an admin can mark a car as sold or delete it.</p>${nav('stock', leadCount(raw))}`);
+  ${paperCard(c, raw)}<p class="foot">Only an admin can mark a car as sold or delete it.</p>${nav('stock', leadCount(raw))}`);
+  bindPaper(c, raw, () => route());
   document.querySelectorAll('[data-st]').forEach((b) => (b.onclick = async () => { try { await store.updateCar(c.id, { status: b.dataset.st }); toast('Updated'); route(); } catch (ex) { fail(ex); } }));
 }
 
@@ -927,6 +1076,7 @@ async function route() {
     if (p[0] === 'login') return await login();
     if (p[0] === 'account') return await accountPage();
     if (p[0] === 'saved') return await savedPage(['saved', 'recent', 'drives'].includes(p[1]) ? p[1] : 'saved');
+    if (p[0] === 'sell') return await sellPage();
     if (p[0] === 'owner') {
       const [, page, id] = p;
       if (!page) return await dashboard();
@@ -935,6 +1085,7 @@ async function route() {
       if (page === 'car') return await costPage(id);
       if (page === 'offers') return await offersPage(id);
       if (page === 'drives') return await drivesPage();
+      if (page === 'sells') return await sellsPage();
       if (page === 'team') return await teamPage();
       if (page === 'add') return await carForm();
       if (page === 'edit') return await carForm(id);
@@ -960,5 +1111,7 @@ async function authRedirect() {
   if (err) setTimeout(() => toast(/expired|invalid/i.test(err) ? 'That login link has expired. Send a new code.' : err), 400);
 }
 addEventListener('hashchange', route);
+// Telugu / English switch in the header: redraw the same screen in the other language.
+document.addEventListener('click', (e) => { if (e.target.closest('[data-lang]')) { setLang(lang() === 'te' ? 'en' : 'te'); route(); } });
 initNative();
 authRedirect().then(() => store.getSettings()).then(applySettings).catch(() => {}).finally(route);

@@ -26,8 +26,8 @@ export function initNative() {
   if (!NATIVE) return;
   const { App, StatusBar, SplashScreen, Share } = P();
   document.documentElement.classList.add('native');
-  StatusBar?.setStyle({ style: 'LIGHT' }).catch(() => {});
-  StatusBar?.setBackgroundColor?.({ color: '#FFFFFF' }).catch(() => {});
+  StatusBar?.setStyle({ style: 'DARK' }).catch(() => {});
+  StatusBar?.setBackgroundColor?.({ color: '#0E0F11' }).catch(() => {});
 
   // Android WebView has no navigator.share: use the native share sheet instead.
   if (Share) navigator.share = (d) => Share.share({ title: d.title, text: d.text, url: d.url, dialogTitle: 'Share with' });
