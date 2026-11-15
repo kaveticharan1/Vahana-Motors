@@ -484,8 +484,8 @@ async function login() {
   render(`${demoBar()}<div class="login"><img class="mark" src="icons/logo.svg" alt="${esc(CONFIG.businessName)} logo"><h1>Log in</h1><p>Enter your email and we will send you a login code. No password to remember.</p>
   <div class="lwhy"><span>${ic('heart', 'sm')}Track your offers and test drives</span><span>${ic('users', 'sm')}${esc(CONFIG.businessName)} team: use your work email</span></div>
   ${LIVE ? '' : '<p class="hint dhint">Demo: any email opens the admin area. Try <b>sales@vahana.demo</b> or <b>staff@vahana.demo</b> for team roles, or an email with <b>buyer</b> in it for a customer account.</p>'}
-  <form id="f1" novalidate><div class="fl"><label for="em">Email</label><input class="fi" id="em" type="email" autocomplete="email" required></div><button class="b pri" id="b1">Send code</button></form>
-  <form id="f2" class="hide" novalidate><p class="sentto" id="sent"></p><div class="fl"><label for="cd">Code from the email</label><input class="fi" id="cd" inputmode="numeric" autocomplete="one-time-code" maxlength="10" style="letter-spacing:.25em;font-size:22px;text-align:center"></div><button class="b pri" id="b2">Log in</button>
+  <form id="f1" novalidate><div class="fl"><label for="em">Email</label><input class="fi" id="em" type="email" inputmode="email" autocomplete="email" autocapitalize="none" autocorrect="off" spellcheck="false" required value="${esc(jget('vm-login-email')[0] || '')}"><p class="hint" id="emfix"></p></div><button class="b pri" id="b1">Send code</button></form>
+  <form id="f2" class="hide" novalidate><p class="sentto" id="sent"></p><div class="fl"><label for="cd">Code from the email</label><input class="fi" id="cd" type="text" inputmode="numeric" autocomplete="one-time-code" autocapitalize="none" autocorrect="off" spellcheck="false" maxlength="10" style="letter-spacing:.25em;font-size:22px;text-align:center"></div><button class="b pri" id="b2">Log in</button>
   <div class="resend"><button type="button" class="linkbtn" id="rs" disabled>Resend code</button><span id="rst"></span></div>
   <button type="button" class="linkbtn" id="chg" style="margin-top:6px">Use a different email</button></form>
   <div class="err" id="err"></div><div class="foot"><a href="#/">Back to showroom</a></div></div>`);
@@ -501,9 +501,23 @@ async function login() {
     $('sent').innerHTML = LIVE ? `We sent a code to <b>${esc(email)}</b>. Check your inbox and spam folder, then type the code here.${NATIVE ? '' : ' Tapping the link in the email also works.'}` : `Demo mode: type any 6 to 10 digits. (Code "sent" to <b>${esc(email)}</b>.)`;
     cooldown();
   };
+  // Catch common typos in the email (e.g. gmakl.com) before a code is sent to an address that does not exist.
+  const FIX = { gmakl: 'gmail', gmial: 'gmail', gamil: 'gmail', gmal: 'gmail', gmaill: 'gmail', gnail: 'gmail', gmali: 'gmail', gmsil: 'gmail', gmaik: 'gmail', yaho: 'yahoo', yahooo: 'yahoo', hotmial: 'hotmail', outlok: 'outlook' };
+  const suggest = (em) => { const m = em.match(/^([^@\s]+)@([^.\s]+)\.([a-z.]+)$/i); if (!m) return null; const d = m[2].toLowerCase(), tld = m[3].toLowerCase();
+    const fd = FIX[d] || d, ft = fd === 'gmail' && tld !== 'com' ? 'com' : tld; return fd !== d || ft !== tld ? `${m[1]}@${fd}.${ft}` : null; };
+  let warned = '';
+  $('em').addEventListener('input', () => { $('emfix').innerHTML = ''; warned = ''; });
   $('f1').onsubmit = async (e) => {
-    e.preventDefault(); email = $('em').value.trim(); $('err').textContent = '';
+    e.preventDefault(); email = $('em').value.trim().toLowerCase(); $('err').textContent = '';
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { $('err').textContent = 'Enter a valid email.'; return; }
+    const better = suggest(email);
+    if (better && warned !== email) {
+      warned = email;
+      $('emfix').innerHTML = `Did you mean <b>${esc(better)}</b>? <button type="button" class="linkbtn" id="usefix">Use this</button> · or tap Send code again to keep it.`;
+      $('usefix').onclick = () => { $('em').value = better; $('emfix').innerHTML = ''; warned = ''; $('em').focus(); };
+      return;
+    }
+    jset('vm-login-email', [email]);
     $('b1').disabled = true;
     try { await send(); $('f1').classList.add('hide'); $('f2').classList.remove('hide'); $('cd').focus(); }
     catch (ex) { $('err').textContent = codeErr(ex.message); $('b1').disabled = false; }
